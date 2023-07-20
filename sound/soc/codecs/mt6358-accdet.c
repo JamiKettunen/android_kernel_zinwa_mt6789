@@ -833,11 +833,8 @@ static void send_status_event(u32 cable_type, u32 status)
 		/* when plug 4-pole out, 3-pole plug out should also be
 		 * reported for slow plug-in case
 		 */
-		if (status == 0) {
-			report = 0;
-			snd_soc_jack_report(&accdet->jack, report,
-					SND_JACK_HEADPHONE);
-		}
+		snd_soc_jack_report(&accdet->jack, status,
+				SND_JACK_HEADPHONE);
 		if (status)
 			report = SND_JACK_MICROPHONE;
 		else
