@@ -560,6 +560,7 @@ static inline int imgsensor_check_is_alive(struct IMGSENSOR_SENSOR *psensor)
 	return err ? -EIO : err;
 }
 
+extern char hodafoneSensorNameStr[HODAFONE_MAX_INVOKE_DRIVERS][32];
 /******************************************************************************
  * imgsensor_set_driver
  ******************************************************************************/
@@ -575,6 +576,9 @@ int imgsensor_set_driver(struct IMGSENSOR_SENSOR *psensor)
 
 	imgsensor_i2c_init(&psensor_inst->i2c_cfg,
 		imgsensor_custom_config[(unsigned int)psensor_inst->sensor_idx].i2c_dev);
+	
+	imgsensor_i2c_init(&psensor_inst->i2c_otp_cfg,
+		imgsensor_custom_config[IMGSENSOR_SENSOR_IDX_MAIN3].i2c_dev);
 
 	imgsensor_i2c_filter_msg(&psensor_inst->i2c_cfg, true);
 
@@ -600,6 +604,12 @@ int imgsensor_set_driver(struct IMGSENSOR_SENSOR *psensor)
 					if (psensor->pfunc->SensorSetPlatformInfo)
 						psensor->pfunc->SensorSetPlatformInfo(
 							phw->g_platform_id);
+						
+					if (psensor->inst.sensor_idx < HODAFONE_MAX_INVOKE_DRIVERS) {
+						memset(hodafoneSensorNameStr[psensor_inst->sensor_idx], 0, 32);
+						memcpy((char*)hodafoneSensorNameStr[psensor_inst->sensor_idx],(char*)psensor_inst->psensor_list->name,sizeof(psensor_inst->psensor_list->name));
+					}
+					
 					ret = 0;
 					break;
 				}

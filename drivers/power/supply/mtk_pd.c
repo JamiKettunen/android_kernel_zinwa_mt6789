@@ -436,7 +436,7 @@ int __mtk_pdc_setup(struct chg_alg_device *alg, int idx)
 						pd->cap.ma[idx] * 1000);
 #endif
 
-			if (oldmA < pd->cap.ma[idx])
+			if (oldmA < pd->cap.ma[idx]  && !pd->enable_inductor_protect)
 				pd_hal_set_input_current(alg, CHG1,
 					pd->cap.ma[idx] * 1000);
 
@@ -492,6 +492,23 @@ void mtk_pdc_reset(struct chg_alg_device *alg)
 	pd->old_cv = 0;
 }
 
+int mtk_pd_input_current_protection(struct chg_alg_device *alg, int vbus)
+{
+	struct mtk_pd *pd = dev_get_drvdata(&alg->dev);
+
+	switch (vbus) {
+	case 5000:
+		pd->input_current_limit1 = 3000000;
+		break;
+	case 9000:
+		pd->input_current_limit1 = 1500000;
+		break;
+	}
+	pd_hal_set_input_current(alg,
+		CHG1, pd->input_current_limit1);
+	pd_dbg("%s run: vbus: %d, ibus_limit: %d", __func__, vbus, pd->input_current_limit1);
+	return 0;
+}
 
 int __mtk_pdc_get_setting(struct chg_alg_device *alg, int *newvbus, int *newcur,
 			int *newidx)
@@ -509,7 +526,6 @@ int __mtk_pdc_get_setting(struct chg_alg_device *alg, int *newvbus, int *newcur,
 	bool chg1_mivr = false;
 	bool chg2_mivr = false;
 	int chg_cnt, i, is_chip_enabled;
-
 
 	__mtk_pdc_init_table(alg);
 	__mtk_pdc_get_reset_idx(alg);
@@ -670,12 +686,9 @@ static int pd_sc_set_charger(struct chg_alg_device *alg)
 	mutex_lock(&pd->data_lock);
 	if (pd->charging_current_limit1 != -1) {
 		if (pd->charging_current_limit1 <
-			pd->sc_charger_current){
+			pd->sc_charger_current)
 			pd->charging_current1 =
 				pd->charging_current_limit1;
-		} else {
-			pd->charging_current1 = pd->sc_charger_current;
-		}
 		ret = pd_hal_get_min_charging_current(alg, CHG1, &ichg1_min);
 		if (ret != -EOPNOTSUPP &&
 			pd->charging_current_limit1 < ichg1_min)
@@ -854,9 +867,13 @@ static int pd_dcs_set_charger(struct chg_alg_device *alg)
 static int __pd_run(struct chg_alg_device *alg)
 {
 	struct mtk_pd *pd = dev_get_drvdata(&alg->dev);
-	int vbus, cur, idx, ret, ret_value = ALG_RUNNING;
+	int vbus = 0;
+	int cur, idx, ret, ret_value = ALG_RUNNING;
 
 	ret = __mtk_pdc_get_setting(alg, &vbus, &cur, &idx);
+
+	if (pd->enable_inductor_protect)
+		mtk_pd_input_current_protection(alg, vbus);
 
 	if (ret != -1 && idx != -1) {
 		if ((pd->input_current_limit1 != -1 &&
@@ -1263,6 +1280,12 @@ static void mtk_pd_parse_dt(struct mtk_pd *pd,
 		pd->vbat_threshold = DISABLE_VBAT_THRESHOLD;
 	}
 
+	pd->enable_inductor_protect = false;
+	if (of_property_read_u32(np, "enable-inductor-protect", &val) >= 0)
+		pd->enable_inductor_protect = true;
+
+	if (!pd->enable_inductor_protect)
+		pr_notice("disable inductor protection\n");
 }
 
 int _pd_get_prop(struct chg_alg_device *alg,
@@ -1353,7 +1376,7 @@ static int mtk_pd_probe(struct platform_device *pdev)
 	mutex_init(&pd->access_lock);
 	mutex_init(&pd->data_lock);
 	mtk_pd_parse_dt(pd, &pdev->dev);
-	pd->bat_psy = power_supply_get_by_name("battery");
+	pd->bat_psy = devm_power_supply_get_by_phandle(&pdev->dev, "gauge");
 	if (IS_ERR_OR_NULL(pd->bat_psy))
 		pd_err("%s: devm power fail to get bat_psy\n", __func__);
 

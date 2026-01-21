@@ -159,10 +159,6 @@ static int cooling_state_to_charger_limit_v1(struct charger_cooling_device *chg)
 }
 
 
-static const struct charger_cooling_platform_data mt6370_pdata = {
-	.state_to_charger_limit = cooling_state_to_charger_limit_v1,
-};
-
 static const struct charger_cooling_platform_data mt6360_pdata = {
 	.state_to_charger_limit = cooling_state_to_charger_limit_v1,
 };
@@ -172,10 +168,6 @@ static const struct charger_cooling_platform_data mt6375_pdata = {
 };
 
 static const struct of_device_id charger_cooling_of_match[] = {
-	{
-		.compatible = "mediatek,mt6370-charger-cooler",
-		.data = (void *)&mt6370_pdata,
-	},
 	{
 		.compatible = "mediatek,mt6360-charger-cooler",
 		.data = (void *)&mt6360_pdata,
@@ -258,7 +250,7 @@ static int charger_cooling_probe(struct platform_device *pdev)
 	struct device_node *np = pdev->dev.of_node;
 	struct thermal_cooling_device *cdev;
 	struct charger_cooling_device *charger_cdev;
-	int ret;
+	int ret, len;
 
 	charger_cdev = devm_kzalloc(dev, sizeof(*charger_cdev), GFP_KERNEL);
 	if (!charger_cdev)
@@ -266,7 +258,9 @@ static int charger_cooling_probe(struct platform_device *pdev)
 
 	charger_cdev->pdata = of_device_get_match_data(dev);
 
-	strncpy(charger_cdev->name, np->name, strlen(np->name));
+	len = (strlen(np->name) > (MAX_CHARGER_COOLER_NAME_LEN - 1)) ?
+		(MAX_CHARGER_COOLER_NAME_LEN - 1) : strlen(np->name);
+	strncpy(charger_cdev->name, np->name, len);
 	charger_cdev->target_state = CHARGER_COOLING_UNLIMITED_STATE;
 	charger_cdev->dev = dev;
 	charger_cdev->max_state = CHARGER_STATE_NUM - 1;

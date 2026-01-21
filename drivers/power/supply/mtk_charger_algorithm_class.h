@@ -32,6 +32,7 @@ struct chg_alg_properties {
  * ALG_TA_NOT_SUPPORT: TA does not support
  * ALG_TA_CHECKING: checking TA
  * ALG_NOT_READY: TA support & not meet the conditions
+ * ALG_WAIVER: alg waives being executed
  * ALG_READY: TA support & meet the conditions
  * ALG_RUNNING: alg is running
  * ALG_DONE: alg done
@@ -41,6 +42,7 @@ enum chg_alg_state {
 	ALG_TA_CHECKING,
 	ALG_TA_NOT_SUPPORT,
 	ALG_NOT_READY,
+	ALG_WAIVER,
 	ALG_READY,
 	ALG_RUNNING,
 	ALG_DONE,
@@ -179,6 +181,7 @@ extern int chg_alg_is_algo_ready(struct chg_alg_device *alg_dev);
 extern int chg_alg_start_algo(struct chg_alg_device *alg_dev);
 extern int chg_alg_is_algo_running(struct chg_alg_device *alg_dev);
 extern int chg_alg_stop_algo(struct chg_alg_device *alg_dev);
+extern int chg_alg_plugout_reset(struct chg_alg_device *alg_dev);
 extern int chg_alg_get_prop(struct chg_alg_device *alg_dev,
 	enum chg_alg_props s, int *value);
 extern int chg_alg_set_prop(struct chg_alg_device *alg_dev,

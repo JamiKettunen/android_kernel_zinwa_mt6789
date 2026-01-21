@@ -36,11 +36,11 @@ int pe50_get_log_level(void)
 #define PE50_DVCHG_VBUSALM_GAP	100	/* mV */
 #define PE50_DVCHG_STARTUP_CONVERT_RATIO	210	/* % */
 #define PE50_DVCHG_CHARGING_CONVERT_RATIO	202	/* % */
-#define PE50_VBUSOVP_RATIO	110
-#define PE50_IBUSOCP_RATIO	110
-#define PE50_VBATOVP_RATIO	110
-#define PE50_IBATOCP_RATIO	110
-#define PE50_ITAOCP_RATIO	110
+#define PE50_VBUSOVP_RATIO	130
+#define PE50_IBUSOCP_RATIO	250
+#define PE50_VBATOVP_RATIO	130
+#define PE50_IBATOCP_RATIO	(PE50_IBUSOCP_RATIO*1.2)
+#define PE50_ITAOCP_RATIO	130
 #define PE50_IBUSUCPF_RECHECK		250	/* mA */
 #define PE50_VBUS_CALI_THRESHOLD	150	/* mV */
 #define PE50_CV_LOWER_BOUND_GAP		50	/* mV */
@@ -3723,6 +3723,12 @@ static int pe50_is_algo_ready(struct chg_alg_device *alg)
 		ret = ALG_INIT_FAIL;
 		goto out;
 	}
+
+	if (!pe50_is_ta_rdy(info)) {
+		ret = pe50_hal_is_pd_adapter_ready(alg);
+		goto out;
+	}
+
 	if (soc < desc->start_soc_min || soc > desc->start_soc_max) {
 		if (soc > 0) {
 			PE50_INFO("soc(%d) not in range(%d~%d)\n", soc,
@@ -3738,10 +3744,6 @@ static int pe50_is_algo_ready(struct chg_alg_device *alg)
 		}
 	}
 
-	if (!pe50_is_ta_rdy(info)) {
-		ret = pe50_hal_is_pd_adapter_ready(alg);
-		goto out;
-	}
 	ret = ALG_READY;
 out:
 	mutex_unlock(&data->lock);

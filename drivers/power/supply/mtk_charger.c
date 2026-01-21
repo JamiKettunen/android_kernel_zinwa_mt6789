@@ -775,6 +775,36 @@ static ssize_t sw_jeita_store(struct device *dev, struct device_attribute *attr,
 static DEVICE_ATTR_RW(sw_jeita);
 /* sw jeita end*/
 
+static ssize_t sw_ovp_threshold_show(struct device *dev, struct device_attribute *attr,
+					       char *buf)
+{
+	struct mtk_charger *pinfo = dev->driver_data;
+
+	chr_err("%s: %d\n", __func__, pinfo->data.max_charger_voltage);
+	return sprintf(buf, "%d\n", pinfo->data.max_charger_voltage);
+}
+
+static ssize_t sw_ovp_threshold_store(struct device *dev, struct device_attribute *attr,
+						const char *buf, size_t size)
+{
+	struct mtk_charger *pinfo = dev->driver_data;
+	signed int temp;
+
+	if (kstrtoint(buf, 10, &temp) == 0) {
+		if (temp < 0)
+			pinfo->data.max_charger_voltage = pinfo->data.vbus_sw_ovp_voltage;
+		else
+			pinfo->data.max_charger_voltage = temp;
+		chr_err("%s: %d\n", __func__, pinfo->data.max_charger_voltage);
+
+	} else {
+		chr_err("%s: format error!\n", __func__);
+	}
+	return size;
+}
+
+static DEVICE_ATTR_RW(sw_ovp_threshold);
+
 static ssize_t chr_type_show(struct device *dev, struct device_attribute *attr,
 					       char *buf)
 {
@@ -2260,6 +2290,20 @@ static bool charger_init_algo(struct mtk_charger *info)
 	}
 	idx++;
 
+
+	alg = get_chg_alg_by_name("pe45");
+	info->alg[idx] = alg;
+	if (alg == NULL)
+		chr_err("get pe45 fail\n");
+	else {
+		chr_err("get pe45 success\n");
+		alg->config = info->config;
+		alg->alg_id = PE4_ID;
+		chg_alg_init_algo(alg);
+		register_chg_alg_notifier(alg, &info->chg_alg_nb);
+	}
+	idx++;
+
 	alg = get_chg_alg_by_name("pe4");
 	info->alg[idx] = alg;
 	if (alg == NULL)
@@ -2397,6 +2441,7 @@ static int mtk_charger_plug_out(struct mtk_charger *info)
 	notify.value = 0;
 	for (i = 0; i < MAX_ALG_NO; i++) {
 		alg = info->alg[i];
+		chg_alg_plugout_reset(alg);
 		chg_alg_notifier_call(alg, &notify);
 	}
 	memset(&info->sc.data, 0, sizeof(struct scd_cmd_param_t_1));
@@ -2511,14 +2556,25 @@ static void kpoc_power_off_check(struct mtk_charger *info)
 	unsigned int boot_mode = info->bootmode;
 	int vbus = 0;
 	int counter = 0;
+	int count = 5;
+	chr_err("%s,boot_mode=%d\n", __func__,boot_mode);
 	/* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
 	/* 9 = LOW_POWER_OFF_CHARGING_BOOT */
 	if (boot_mode == 8 || boot_mode == 9) {
-		vbus = get_vbus(info);
-		if (vbus >= 0 && vbus < 2500 && !mtk_is_charger_on(info) && !info->pd_reset) {
-			chr_err("Unplug Charger/USB in KPOC mode, vbus=%d, shutdown\n", vbus);
+		while (count > 0) {
+			vbus = get_vbus(info);
+			if (vbus > 2500) { 
+				break;
+			} else {
+				count --;
+				msleep(500);
+			}
+		}
+		
+		if (count <= 0 || (vbus >= 0 && vbus < 2500 && !mtk_is_charger_on(info) && !info->pd_reset)) {
+			chr_err("Unplug Charger/USB in KPOC mode, vbus=%d count=%d, shutdown\n", vbus,count);
 			while (1) {
-				if (counter >= 20000) {
+				if (counter >= 2000) {
 					chr_err("%s, wait too long\n", __func__);
 					kernel_power_off();
 					break;
@@ -2544,7 +2600,8 @@ static void charger_status_check(struct mtk_charger *info)
 	int ret;
 	bool charging = true;
 
-	chg_psy = power_supply_get_by_name("primary_chg");
+	chg_psy = devm_power_supply_get_by_phandle(&info->pdev->dev,
+						       "charger");
 	if (IS_ERR_OR_NULL(chg_psy)) {
 		chr_err("%s Couldn't get chg_psy\n", __func__);
 	} else {
@@ -2779,6 +2836,10 @@ static int mtk_charger_setup_files(struct platform_device *pdev)
 	struct mtk_charger *info = platform_get_drvdata(pdev);
 
 	ret = device_create_file(&(pdev->dev), &dev_attr_sw_jeita);
+	if (ret)
+		goto _out;
+
+	ret = device_create_file(&(pdev->dev), &dev_attr_sw_ovp_threshold);
 	if (ret)
 		goto _out;
 
@@ -3220,7 +3281,8 @@ static void mtk_charger_external_power_changed(struct power_supply *psy)
 
 	if (IS_ERR_OR_NULL(chg_psy)) {
 		pr_notice("%s Couldn't get chg_psy\n", __func__);
-		chg_psy = power_supply_get_by_name("primary_chg");
+		chg_psy = devm_power_supply_get_by_phandle(&info->pdev->dev,
+						       "charger");
 		info->chg_psy = chg_psy;
 	} else {
 		ret = power_supply_get_property(chg_psy,
@@ -3410,11 +3472,13 @@ static int mtk_charger_probe(struct platform_device *pdev)
 	info->psy1 = power_supply_register(&pdev->dev, &info->psy_desc1,
 			&info->psy_cfg1);
 
-	info->chg_psy = power_supply_get_by_name("primary_chg");
+	info->chg_psy = devm_power_supply_get_by_phandle(&pdev->dev,
+		"charger");
 	if (IS_ERR_OR_NULL(info->chg_psy))
 		chr_err("%s: devm power fail to get chg_psy\n", __func__);
 
-	info->bat_psy = power_supply_get_by_name("battery");
+	info->bat_psy = devm_power_supply_get_by_phandle(&pdev->dev,
+		"gauge");
 	if (IS_ERR_OR_NULL(info->bat_psy))
 		chr_err("%s: devm power fail to get bat_psy\n", __func__);
 

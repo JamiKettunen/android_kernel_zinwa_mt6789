@@ -2,14 +2,16 @@
 /* Copyright (c) 2020 MediaTek Inc. */
 
 &i2c6 {
-	lm3643:lm3643@63 {
-		compatible = "mediatek,lm3643";
+	flashlightgpio:flashlightgpio@63 {
+		compatible = "mediatek,flashlightgpio";
 		reg = <0x63>;
 		#cooling-cells = <2>;
-		pinctrl-names = "default", "hwen_high", "hwen_low";
-		pinctrl-0 = <&lm3643_pins_default>;
-		pinctrl-1 = <&lm3643_pins_hwen_high>;
-		pinctrl-2 = <&lm3643_pins_hwen_low>;
+		pinctrl-names = "default", "enable_high", "enable_low", "mode_high", "mode_low";
+		pinctrl-0 = <&flashlightgpio_pins_default>;
+		pinctrl-1 = <&flashlightgpio_pins_enable_high>;
+		pinctrl-2 = <&flashlightgpio_pins_enable_low>;
+		pinctrl-3 = <&flashlightgpio_pins_mode_high>;
+		pinctrl-4 = <&flashlightgpio_pins_mode_low>;
 		status = "okay";
 		flash@0{
 			reg = <0>;
@@ -37,20 +39,36 @@
 };
 
 &pio {
-	lm3643_pins_default: default {
+	flashlightgpio_pins_default: default {
 	};
 
-	lm3643_pins_hwen_high: hwen_high {
+	flashlightgpio_pins_enable_high: enable_high {
 		pins_cmd_dat {
-			pinmux = <PINMUX_GPIO157__FUNC_GPIO157>;
+			pinmux = <PINMUX_GPIO155__FUNC_GPIO155>;
 			slew-rate = <1>;
 			output-high;
 		};
 	};
 
-	lm3643_pins_hwen_low: hwen_low {
+	flashlightgpio_pins_enable_low: enable_low {
 		pins_cmd_dat {
-			pinmux = <PINMUX_GPIO157__FUNC_GPIO157>;
+			pinmux = <PINMUX_GPIO155__FUNC_GPIO155>;
+			slew-rate = <1>;
+			output-low;
+		};
+	};
+
+	flashlightgpio_pins_mode_high: mode_high {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO154__FUNC_GPIO154>;
+			slew-rate = <1>;
+			output-high;
+		};
+	};
+
+	flashlightgpio_pins_mode_low: mode_low {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO154__FUNC_GPIO154>;
 			slew-rate = <1>;
 			output-low;
 		};
@@ -94,9 +112,9 @@
 };
 
 &camera_af_hw_node {
-	camaf_m1_pmic-supply = <&rt5133_ldo3>;
-	camaf_m2_pmic-supply = <&rt5133_gpio1>;
-	camaf_m3_pmic-supply = <&rt5133_gpio1>;
+	camaf_m1_pmic-supply = <&wl2868c_ldo6>;
+	camaf_m2_pmic-supply = <&wl2868c_ldo5>;
+	camaf_m3_pmic-supply = <&wl2868c_ldo5>;
 	status = "okay";
 };
 /* CAMERA AF end */

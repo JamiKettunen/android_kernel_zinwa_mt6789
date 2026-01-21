@@ -23,6 +23,19 @@
 
 #include "../common/mtk-sp-spk-amp.h"
 
+#ifdef CONFIG_SND_SOC_AW87XXX_MODULE
+#include "aw87xxx.h"
+#endif
+
+#if IS_ENABLED(CONFIG_SND_SOC_OCA72XXX)
+extern int oca72xxx_add_codec_controls(void *codec);
+extern int oca72xxx_set_profile(int dev_index, char *profile);
+
+static char *oca_profile[] = {"Music", "Off"};/*oca72xxx_acf.bin 文件中配置场景*/
+enum oca72xxx_dev_index {
+       OCA_DEV_0 = 0,
+};
+#endif
 /*
  * if need additional control for the ext spk amp that is connected
  * after Lineout Buffer / HP Buffer on the codec, put the control in
@@ -92,9 +105,18 @@ static int mt6789_mt6366_spk_amp_event(struct snd_soc_dapm_widget *w,
 	switch (event) {
 	case SND_SOC_DAPM_POST_PMU:
 		/* spk amp on control */
+
+#if IS_ENABLED(CONFIG_SND_SOC_OCA72XXX)
+		/*切换 PA OCA_DEV_0 为 Music 场景*/
+		oca72xxx_set_profile(OCA_DEV_0, oca_profile[0]);
+#endif
 		break;
 	case SND_SOC_DAPM_PRE_PMD:
 		/* spk amp off control */
+#if IS_ENABLED(CONFIG_SND_SOC_OCA72XXX)
+		/*切换 PA OCA_DEV_0 为 off 场景*/
+		oca72xxx_set_profile(OCA_DEV_0, oca_profile[1]);
+#endif
 		break;
 	default:
 		break;
@@ -288,6 +310,7 @@ static int mt6789_mt6366_mtkaif_calibration(struct snd_soc_pcm_runtime *rtd)
 
 static int mt6789_mt6366_init(struct snd_soc_pcm_runtime *rtd)
 {
+	int ret;
 	struct snd_soc_component *component =
 		snd_soc_rtdcom_lookup(rtd, AFE_PCM_NAME);
 	struct mtk_base_afe *afe = snd_soc_component_get_drvdata(component);
@@ -303,6 +326,14 @@ static int mt6789_mt6366_init(struct snd_soc_pcm_runtime *rtd)
 	ops.set_rch_dc_compensation = mt6789_set_rch_dc_compensation;
 	ops.adda_dl_gain_control = mt6789_adda_dl_gain_control;
 	mt6358_set_codec_ops(codec_component, &ops);
+
+#if IS_ENABLED(CONFIG_SND_SOC_OCA72XXX)
+	printk("oca72xxx_add_codec_controls");
+	ret = oca72xxx_add_codec_controls((void *)codec_component);
+	if (ret < 0) {
+		pr_err("%s: add_codec_controls failed, err %d\n",__func__, ret);
+	};
+#endif
 
 	/* set mtkaif protocol */
 	mt6358_set_mtkaif_protocol(codec_component,

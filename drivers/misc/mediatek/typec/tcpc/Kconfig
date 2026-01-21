@@ -32,6 +32,16 @@ config TCPC_RT1711H
 	  Richtek RT1711H
 	  TypeC port Controller
 	  Driver
+	  
+config TCPC_UPM7610
+	tristate "Unisemipower UPM7610 TypeC port Controller Driver"
+	depends on TCPC_CLASS
+	default n
+	help
+	  Say Y to enable
+	  Unisemipower UPM7610
+	  TypeC port Controller
+	  Driver
 
 config TCPC_RT5081
 	tristate "Richtek RT5081 TypeC port Controller Driver"

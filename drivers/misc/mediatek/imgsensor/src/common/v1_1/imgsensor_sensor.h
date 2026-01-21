@@ -24,6 +24,7 @@ struct IMGSENSOR_SENSOR_INST {
 	enum IMGSENSOR_STATE state;
 	enum IMGSENSOR_SENSOR_IDX sensor_idx;
 	struct IMGSENSOR_I2C_CFG i2c_cfg;
+	struct IMGSENSOR_I2C_CFG i2c_otp_cfg;
 	struct IMGSENSOR_SENSOR_STATUS status;
 	struct IMGSENSOR_SENSOR_LIST *psensor_list;
 	struct mutex sensor_mutex;
