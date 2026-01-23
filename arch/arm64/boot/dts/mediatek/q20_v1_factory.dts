@@ -1521,5 +1521,5 @@ g_Q_MAX_H_CURRENT =
 	1976   1976   1976   1976
 >;
 };
-#include <q20_v1_factory/cust.dtsi>
+#include "q20_v1_factory/cust.dtsi"
 /*End of this file, DO NOT ADD ANYTHING HERE*/
