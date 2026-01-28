@@ -1,0 +1,182 @@
+# Copyright (c) 2026, TrustKernel Incorporated
+# All Rights Reserved.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# version 2 as published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+
+load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
+load("@mgk_info//:kernel_version.bzl", "kernel_version")
+
+package(
+	default_visibility = [
+		"//visibility:public",
+	],
+)
+
+filegroup(
+	name = "ddk_kconfigs",
+	srcs = glob([
+		"**/Kconfig",
+	]),
+)
+
+filegroup(
+	name = "srcs",
+	srcs = glob([
+		"**/*.c",
+		"**/*.h",
+		"**/Kbuild",
+		"**/Kbuild.*",
+		"**/Makefile",
+		"**/Makefile.*",
+	]),
+)
+
+# trusted_mem package with symbol and header files
+mgk_package = "//kernel_device_modules-{}".format(kernel_version)
+tmem_package = "{}/drivers/misc/mediatek/trusted_mem".format(mgk_package)
+
+ddk_headers(
+	name = "tkcore_public_hdrs",
+	hdrs = glob([
+		"include/linux/*.h",
+	]),
+	includes = [
+		"include",
+	],
+)
+
+ddk_headers(
+	name = "tkcore_local_hdrs",
+	# include header files
+	hdrs = glob([
+		"include/linux/*.h",
+		"include/arm_common/*.h",
+	]),
+	# include directory for relative path
+	includes = [
+		"include",
+	],
+	visibility = [
+		"//visibility:private",
+	],
+)
+
+ddk_headers(
+	name = "tkcore_armtz_local_hdrs",
+	# include header files
+	hdrs = glob([
+		"armtz/*.h",
+		"core/*.h"
+	]),
+	# include directory for relative path
+	includes = [
+		"armtz",
+		"core",
+	],
+	visibility = [
+		"//visibility:private",
+	],
+)
+
+ddk_headers(
+	name = "tkcore_core_local_hdrs",
+	# include header files
+	hdrs = glob([
+		"core/*.h",
+		"*.h"
+	]),
+	# include directory for relative path
+	includes = [
+		"core",
+		".",
+	],
+	visibility = [
+		"//visibility:private",
+	],
+)
+
+filegroup(
+	name = "tkcore_core_source",
+	srcs = [
+		"core/tee_core.c",
+		"core/tee_context.c",
+		"core/tee_session.c",
+		"core/tee_shm.c",
+		"core/tee_supp_com.c",
+		"core/tee_sysfs.c",
+		"core/tee_kernel_api.c",
+		"core/tee_wait_queue.c",
+		"core/tee_procfs.c",
+		"core/plat.c",
+	],
+	visibility = [
+		"//visibility:private",
+	],
+)
+
+filegroup(
+	name = "tkcore_armtz_source",
+	srcs = [
+		"armtz/tee_tz_drv.c",
+		"armtz/tee_smc_xfer.c",
+		"armtz/tee_mem.c",
+		"armtz/handle.c",
+	],
+	visibility = [
+		"//visibility:private",
+	],
+)
+
+define_mgk_ddk_ko(
+	name = "tkcore",
+	srcs = [
+		":tkcore_core_source",
+	],
+	conditional_srcs = {
+		"CONFIG_TRUSTKERNEL_TEE_FP_SUPPORT": {
+			True: [
+				"core/peridev.c",
+			],
+		},
+	},
+
+	out = "tkcore.ko",
+	hdrs = [
+		":tkcore_public_hdrs",
+		":tkcore_core_local_hdrs",
+	],
+	header_deps = [
+		":tkcore_local_hdrs",
+		":tkcore_core_local_hdrs",
+	],
+#	local_defines = ,
+)
+
+define_mgk_ddk_ko(
+	name = "tkcore_drv",
+	srcs = [
+		":tkcore_armtz_source",
+	],
+	out = "tkcore_drv.ko",
+	ko_deps = [
+		"{}:ffa".format(tmem_package),
+		"{}/drivers/tee/tkcore:tkcore".format(mgk_package),
+	],
+	hdrs = [
+		":tkcore_public_hdrs",
+		":tkcore_armtz_local_hdrs",
+	],
+	header_deps = [
+		":tkcore_local_hdrs",
+		":tkcore_armtz_local_hdrs",
+	],
+#	local_defines = ,
+)
