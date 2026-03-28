@@ -386,8 +386,8 @@ static irqreturn_t mtk_disp_rdma_irq_handler(int irq, void *dev_id)
 			unsigned int crtc_idx = drm_crtc_index(crtc);
 			unsigned int pf_idx;
 
+			cur_time = ktime_get();
 			if (rdma->id == DDP_COMPONENT_RDMA0) {
-				cur_time = ktime_get();
 				DRM_MMP_EVENT_START(rdma0, val, 0);
 			}
 			DDPIRQ("[IRQ] %s: frame start!\n", mtk_dump_comp_str(rdma));
@@ -430,7 +430,8 @@ static irqreturn_t mtk_disp_rdma_irq_handler(int irq, void *dev_id)
 			  mtk_dump_comp_str(rdma), priv->underflow_cnt);
 		if (mtk_crtc)
 			drm_priv = mtk_crtc->base.dev->dev_private;
-		if (drm_priv && drm_priv->data->mmsys_id == MMSYS_MT6768)
+		if (drm_priv && (drm_priv->data->mmsys_id == MMSYS_MT6768 ||
+			 drm_priv->data->mmsys_id == MMSYS_MT6765))
 			DDPMSG("%s: pix(%d,%d,%d,%d)\n", mtk_dump_comp_str(rdma),
 				readl(MT6768_DISP_REG_RDMA_IN_P_CNT + rdma->regs),
 				readl(MT6768_DISP_REG_RDMA_IN_LINE_CNT + rdma->regs),
@@ -652,13 +653,11 @@ void mtk_rdma_cal_golden_setting(struct mtk_ddp_comp *comp,
 	unsigned long long consume_rate = 0; /* 100 times */
 	struct mtk_drm_private *priv = comp->mtk_crtc->base.dev->dev_private;
 	unsigned long long temp = 0;
-
 #ifdef SHARE_WROT_SRAM
 	/* Share MDP WROT SRAM. */
 	if (comp->id == DDP_COMPONENT_RDMA0 && can_use_wrot_sram()) {
 		unsigned int fifo_off_ultra = 0; /* 10 times */
 
-		DDPINFO("%s can use wrot sram", __func__);
 		if (height > 2340)
 			fifo_off_ultra = 400;
 		else
@@ -678,10 +677,8 @@ void mtk_rdma_cal_golden_setting(struct mtk_ddp_comp *comp,
 		gs[GS_RDMA_SRAM_SEL] = 1;
 		set_share_sram(1);
 	} else {
-		DDPINFO("%s cannot use wrot sram", __func__);
 		if ((priv->data->mmsys_id == MMSYS_MT6768 ||
-			 priv->data->mmsys_id == MMSYS_MT6765) && if_fps == 90) {
-			DDPINFO("%s modify values for wrot sram 90hz", __func__);
+                     priv->data->mmsys_id == MMSYS_MT6765) && if_fps == 90) {
 			pre_ultra_low_us = 55;
 			pre_ultra_high_us = 65;
 			ultra_low_us = 45;
@@ -2032,6 +2029,7 @@ static const struct mtk_disp_rdma_data mt6885_rdma_driver_data = {
 	.has_greq_urg_num = true,
 	.is_support_34bits = false,
 	.dsi_buffer = false,
+	.disable_underflow = true,
 };
 
 static const struct mtk_disp_rdma_data mt6983_rdma_driver_data = {

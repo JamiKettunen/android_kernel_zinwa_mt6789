@@ -61,6 +61,7 @@ enum slg51000_regulators {
 struct wl2868c {
 	struct device *dev;
 	struct regmap *regmap;
+	struct gpio_desc *enable_gpio;
 	struct regulator_desc *rdesc[WL2868C_MAX_REGULATORS];
 	struct regulator_dev *rdev[WL2868C_MAX_REGULATORS];
 };
@@ -154,7 +155,7 @@ static int wl2868c_of_parse_cb(struct device_node *np,
 	return 0;
 }
 
-#define WL2868C_REGL_DESC(_id, _name, _min, _step)       \
+#define WL2868C_REGL_DESC(_id, _name, _min, _max , _step)       \
 	[WL2868C_REGULATOR_##_id] = {                             \
 		.name = #_name,                                    \
 		.id = WL2868C_REGULATOR_##_id,                    \
@@ -162,7 +163,7 @@ static int wl2868c_of_parse_cb(struct device_node *np,
 		.of_parse_cb = wl2868c_of_parse_cb,               \
 		.ops = &wl2868c_regl_ops,                         \
 		.regulators_node = of_match_ptr("regulators"),     \
-		.n_voltages = 256,                                 \
+		.n_voltages = (_max-_min)/_step,                                 \
 		.min_uV = _min,                                    \
 		.uV_step = _step,                                  \
 		.linear_min_sel = 0,                               \
@@ -175,13 +176,13 @@ static int wl2868c_of_parse_cb(struct device_node *np,
 	}
 
 static struct regulator_desc wl2868c_regls_desc[WL2868C_MAX_REGULATORS] = {
-	WL2868C_REGL_DESC(LDO1, wl2868c_ldo1, 496000, 8000),
-	WL2868C_REGL_DESC(LDO2, wl2868c_ldo2, 496000, 8000),
-	WL2868C_REGL_DESC(LDO3, wl2868c_ldo3, 1504000, 8000),
-	WL2868C_REGL_DESC(LDO4, wl2868c_ldo4, 1504000, 8000),
-	WL2868C_REGL_DESC(LDO5, wl2868c_ldo5, 1504000, 8000),
-	WL2868C_REGL_DESC(LDO6, wl2868c_ldo6, 1504000, 8000),
-	WL2868C_REGL_DESC(LDO7, wl2868c_ldo7, 1504000, 8000),
+	WL2868C_REGL_DESC(LDO1, wl2868c_ldo1, 496000, 1512000, 8000),
+	WL2868C_REGL_DESC(LDO2, wl2868c_ldo2, 496000, 1512000, 8000),
+	WL2868C_REGL_DESC(LDO3, wl2868c_ldo3, 1504000, 3544000, 8000),
+	WL2868C_REGL_DESC(LDO4, wl2868c_ldo4, 1504000, 3544000, 8000),
+	WL2868C_REGL_DESC(LDO5, wl2868c_ldo5, 1504000, 3544000, 8000),
+	WL2868C_REGL_DESC(LDO6, wl2868c_ldo6, 1504000, 3544000, 8000),
+	WL2868C_REGL_DESC(LDO7, wl2868c_ldo7, 1504000, 3544000, 8000),
 };
 
 static int wl2868c_regulator_init(struct wl2868c *chip)
@@ -201,13 +202,13 @@ static int wl2868c_regulator_init(struct wl2868c *chip)
 	};
 
 	const unsigned int initial_voltage[WL2868C_MAX_REGULATORS] = {
-		0x00,//LDO1 1.2V main DVDD
-		0x00,//LDO2 1.2V sub  DVDD2
-		0x00,//LDO3 2.8V main AFVDD
-		0x00,//LDO4 2.8V sub AVDD
-		0x00,//LDO5 1.8V DOVDD
-		0x00,//LDO6 2.8V main AVDD
-		0xFF,//LDO7 3.3V p_sensor
+		0x45,//LDO1 1.2V main DVDD
+		0x58,//LDO2 1.2V sub  DVDD
+		0x25,//LDO3 1.8V main AVDD1.8
+		0xa2,//LDO4 2.8V main AVDD
+		0xa2,//LDO5 2.8V sub AVDD
+		0xa2,//LDO6 2.8V main AFVDD
+		0x25,//LDO7 1.8V IOVDD
 	};
 
 	/*Disable all ldo output by default*/
@@ -309,6 +310,13 @@ static int wl2868c_i2c_probe(struct i2c_client *client,
 	if (!chip)
 		return -ENOMEM;
 
+	chip->enable_gpio = devm_gpiod_get_optional(dev, "enable",
+						    GPIOD_OUT_HIGH);
+	if (IS_ERR(chip->enable_gpio)) {
+		dev_err(dev, "Failed to request HWEN gpio\n");
+		return PTR_ERR(chip->enable_gpio);
+	}
+	
 	dev_info(chip->dev, "wl2868c probe Enter...\n");
 
 	i2c_set_clientdata(client, chip);
@@ -347,12 +355,18 @@ static const struct i2c_device_id wl2868c_i2c_id[] = {
 	{},
 };
 
+static const struct of_device_id __maybe_unused wl2868c_ofid_tbls[] = {
+	{ .compatible = "ovti,wl2868c-i2c", },
+	{ }
+};
 
 MODULE_DEVICE_TABLE(i2c, wl2868c_i2c_id);
 
 static struct i2c_driver wl2868c_regulator_driver = {
 	.driver = {
 		.name = "wl2868c",
+		.owner = THIS_MODULE,
+		.of_match_table = of_match_ptr(wl2868c_ofid_tbls),
 	},
 	.probe = wl2868c_i2c_probe,
 	.remove = wl2868c_i2c_remove,

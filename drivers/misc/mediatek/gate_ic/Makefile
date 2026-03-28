@@ -11,4 +11,6 @@
 # GNU General Public License for more details.
 #
 obj-$(CONFIG_RT4831A_I2C) += rt4831a_drv.o
+obj-$(CONFIG_OCP2131_I2C) += ocp2131_drv.o
 ccflags-$(CONFIG_RT4831A_I2C) += -I$(srctree)/drivers/leds/
+ccflags-$(CONFIG_OCP2131_I2C) += -I$(srctree)/drivers/leds/

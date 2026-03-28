@@ -15,7 +15,7 @@
 /*the index is consistent with enum IMGSENSOR_HW_PIN*/
 char * const imgsensor_hw_pin_names[] = {
 	"none",
-	"pdn",
+	"pnd",
 	"rst",
 	"vcama",
 	"vcama1",
@@ -114,7 +114,7 @@ enum IMGSENSOR_RETURN imgsensor_hw_init(struct IMGSENSOR_HW *phw)
 					IS_MT6855(phw->g_platform_id))
 					pcust_pwr_cfg->i2c_dev = IMGSENSOR_I2C_DEV_4;
 				else
-					pcust_pwr_cfg->i2c_dev = IMGSENSOR_I2C_DEV_2;
+					pcust_pwr_cfg->i2c_dev = IMGSENSOR_I2C_DEV_4;
 			}
 			break;
 		default:

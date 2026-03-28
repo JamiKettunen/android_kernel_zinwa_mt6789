@@ -68,7 +68,7 @@ struct hrt_mmclk_request hrt_req_level_fhdp_mt6768[] = {
 	{50, 700000},
 	{60, 800000},
 };
-/* aspect ratio <= 18 : 9 */
+
 struct hrt_mmclk_request hrt_req_level_mt6761[] = {
 	{40, 650000},
 	{60, 700000},
@@ -93,30 +93,30 @@ struct hrt_mmclk_request hrt_req_level_ddr3_fhd_mt6765[] = {
 //LPDDR4
 /* aspect ratio <= 18 : 9 */
 struct hrt_mmclk_request hrt_req_level_ddr4_hd_mt6765[] = {
+	{75, 650000},
+	{135, 700000},
+	{155, 800000},
+};
+
+/* aspect ratio > 18 : 9 */
+struct hrt_mmclk_request hrt_req_level_ddr4_fhd_mt6765[] = {
 	{35, 650000},
 	{60, 700000},
 	{70, 800000},
 };
 
-/* aspect ratio > 18 : 9 */
-struct hrt_mmclk_request hrt_req_level_ddr4_fhd_mt6765[] = {
-	{30, 650000},
-	{50, 700000},
-	{60, 800000},
-};
-
 //LPDDR4 and high fps
+/* aspect ratio <= 18 : 9 */
 struct hrt_mmclk_request hrt_req_level_ddr4_hd_hfps_mt6765[] = {
-	{20, 650000},
-	{35, 700000},
-	{40, 800000},
+	{50, 650000},
+	{90, 700000},
+	{100, 800000},
 };
-
 /* aspect ratio > 18 : 9 */
 struct hrt_mmclk_request hrt_req_level_ddr4_fhd_hfps_mt6765[] = {
-	{20, 650000},
-	{30, 700000},
-	{40, 800000},
+	{20, 650000},/*23*/
+	{40, 700000},/*40*/
+	{45, 800000},/*47*/
 };
 #endif
 
@@ -379,8 +379,8 @@ void mtk_disp_hrt_mmclk_request_mt6765(struct mtk_drm_crtc *mtk_crtc, unsigned i
 	struct mtk_ddp_comp *output_comp = mtk_ddp_comp_request_output(mtk_crtc);
 	struct drm_display_mode *mode = NULL;
 	unsigned int max_fps = 0;
-	bool is_tall_aspect_ratio = (mtk_crtc->base.mode.vdisplay /
-					mtk_crtc->base.mode.hdisplay) > (18 / 9);
+	bool is_tall_aspect_ratio = ((mtk_crtc->base.mode.vdisplay*100) /
+					mtk_crtc->base.mode.hdisplay) > 200 /*18:9*/;
 
 	bw_base = mtk_drm_primary_frame_bw(crtc);
 	if (bw_base != 0)
@@ -389,6 +389,7 @@ void mtk_disp_hrt_mmclk_request_mt6765(struct mtk_drm_crtc *mtk_crtc, unsigned i
 		DDPINFO("%s-error: frame_bw is zero, skip request mmclk\n", __func__);
 		return;
 	}
+
 	mtk_ddp_comp_io_cmd(output_comp, NULL, DSI_GET_MODE_BY_MAX_VREFRESH, &mode);
 	if (mode)
 		max_fps = drm_mode_vrefresh(mode);
@@ -461,22 +462,27 @@ int mtk_disp_set_hrt_bw(struct mtk_drm_crtc *mtk_crtc, unsigned int bw)
 	int i, j, ret = 0;
 	tmp = bw;
 
-	for (i = 0; i < DDP_PATH_NR; i++) {
-		if (mtk_crtc->ddp_mode < DDP_MODE_NR) {
-			if (!(mtk_crtc->ddp_ctx[mtk_crtc->ddp_mode].req_hrt[i]))
+	if (priv->data->mmsys_id == MMSYS_MT6768 ||
+		priv->data->mmsys_id == MMSYS_MT6761 ||
+		priv->data->mmsys_id == MMSYS_MT6765) {
+		DDPMSG("%s: no need to set module hrt bw for legacy!\n", __func__);
+	} else {
+		for (i = 0; i < DDP_PATH_NR; i++) {
+			if (mtk_crtc->ddp_mode < DDP_MODE_NR) {
+				if (!(mtk_crtc->ddp_ctx[mtk_crtc->ddp_mode].req_hrt[i]))
+					continue;
+			}
+			for_each_comp_in_crtc_target_path(comp, mtk_crtc, j, i) {
+				ret |= mtk_ddp_comp_io_cmd(comp, NULL, PMQOS_SET_HRT_BW,
+							&tmp);
+			}
+			if (!mtk_crtc->is_dual_pipe)
 				continue;
+			for_each_comp_in_dual_pipe(comp, mtk_crtc, j, i)
+				ret |= mtk_ddp_comp_io_cmd(comp, NULL, PMQOS_SET_HRT_BW,
+						&tmp);
 		}
-		for_each_comp_in_crtc_target_path(comp, mtk_crtc, j, i) {
-			ret |= mtk_ddp_comp_io_cmd(comp, NULL, PMQOS_SET_HRT_BW,
-						   &tmp);
-		}
-		if (!mtk_crtc->is_dual_pipe)
-			continue;
-		for_each_comp_in_dual_pipe(comp, mtk_crtc, j, i)
-			ret |= mtk_ddp_comp_io_cmd(comp, NULL, PMQOS_SET_HRT_BW,
-					&tmp);
 	}
-
 	if (ret == RDMA_REQ_HRT)
 		tmp = mtk_drm_primary_frame_bw(crtc);
 

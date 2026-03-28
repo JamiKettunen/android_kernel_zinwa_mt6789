@@ -24,6 +24,8 @@
 #include "mach/mtk_thermal.h"
 #include "mtk_thermal_timer.h"
 #include <mtk_ts_setting.h>
+#include "gpu_misc.h"
+#include <gpufreq_v2.h>
 
 #if IS_ENABLED(CONFIG_MTK_CLKMGR)
 #include <mach/mtk_clkmgr.h>
@@ -2057,6 +2059,7 @@ static int tscpu_read_ttpct(struct seq_file *m, void *v)
 	max_cpu_pwr = 3000;
 #endif
 	max_gpu_pwr = gpufreq_get_max_power(TARGET_DEFAULT) + 1;
+
 	cpu_power = apthermolmt_get_cpu_power_limit();
 	gpu_power = apthermolmt_get_gpu_power_limit();
 
@@ -2183,7 +2186,7 @@ int tscpu_is_temp_valid(void)
 
 	return is_valid;
 }
-
+EXPORT_SYMBOL(tscpu_is_temp_valid);
 
 
 void tscpu_update_tempinfo(void)
@@ -2548,6 +2551,7 @@ static int tscpu_thermal_probe(struct platform_device *dev)
 #endif
 
 	tscpu_thermal_clock_on();
+
 	/* get gpufreq info*/
 	err = get_gpu_power_info();
 	if (err)
@@ -2659,7 +2663,6 @@ static int tscpu_thermal_probe(struct platform_device *dev)
 
 	return 0;
 }
-
 static int get_gpu_power_info(void)
 {
 	int num, i = 0;

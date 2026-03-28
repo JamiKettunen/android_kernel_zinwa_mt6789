@@ -57,7 +57,9 @@ extern void mtk_cooler_mutt_exit(void);
 extern int mtk_cooler_mutt_init(void);
 #endif
 extern void mtk_cooler_bcct_exit(void);
+extern void mtk_cooler_bcct_2nd_exit(void);
 extern int mtk_cooler_bcct_init(void);
+extern int mtk_cooler_bcct_2nd_init(void);
 #if IS_ENABLED(CONFIG_MTK_GAUGE_VERSION)
 extern int  mtkcooler_bcct_late_init(void);
 #endif

@@ -645,6 +645,7 @@ static void mtk_dsi_dphy_timconfig(struct mtk_dsi *dsi, void *handle)
 		data_phy_cycle = (da_hs_exit + 1) + lpx + hs_prpr + hs_zero + 1;
 	} else {
 		switch (priv->data->mmsys_id) {
+		case MMSYS_MT6885:
 		case MMSYS_MT6768:
 		case MMSYS_MT6765:
 		case MMSYS_MT6761:
@@ -757,6 +758,7 @@ CONFIG_REG:
 		case MMSYS_MT6768:
 		case MMSYS_MT6765:
 		case MMSYS_MT6761:
+		case MMSYS_MT6885:
 			break;
 		default:
 			//N4/5 must add this constraint, N6 is option, so we use the same
@@ -2146,8 +2148,23 @@ static void mtk_dsi_stop(struct mtk_dsi *dsi)
 static void mtk_dsi_set_interrupt_enable(struct mtk_dsi *dsi)
 {
 	u32 inten;
+	struct mtk_ddp_comp *comp = &dsi->ddp_comp;
+	struct mtk_drm_crtc *mtk_crtc = comp->mtk_crtc;
+	int index = 0;
 
-	inten = BUFFER_UNDERRUN_INT_FLAG | INP_UNFINISH_INT_EN;
+	if (!mtk_crtc) {
+		DDPMSG("%s, mtk_crtc is NULL\n", __func__);
+		return;
+	}
+
+	if (atomic_read(&mtk_crtc->force_high_step) == 1) {
+		inten = INP_UNFINISH_INT_EN;
+		index = drm_crtc_index(&mtk_crtc->base);
+		DDPMSG("%s force_high_step = 1, skip underrun irq\n", __func__);
+		CRTC_MMP_MARK(index, dsi_underrun_irq, 0, 1);
+	} else {
+		inten = BUFFER_UNDERRUN_INT_FLAG | INP_UNFINISH_INT_EN;
+	}
 
 	if (!mtk_dsi_is_cmd_mode(&dsi->ddp_comp))
 		inten |= FRAME_DONE_INT_FLAG;
@@ -2389,8 +2406,10 @@ irqreturn_t mtk_dsi_irq_status(int irq, void *dev_id)
 		IF_DEBUG_IRQ_TS(find_work,
 			dsi->ddp_comp.ts_works[work_id].irq_time, i)
 
-		if (status & BUFFER_UNDERRUN_INT_FLAG) {
+		if ((status & BUFFER_UNDERRUN_INT_FLAG)
+			&& (atomic_read(&mtk_crtc->force_high_step) == 0)) {
 			struct mtk_drm_private *priv = NULL;
+			int en = 0;
 
 			if (mtk_crtc && mtk_crtc->base.dev)
 				priv = mtk_crtc->base.dev->dev_private;
@@ -2417,6 +2436,10 @@ irqreturn_t mtk_dsi_irq_status(int irq, void *dev_id)
 
 			if (mtk_crtc)
 				atomic_set(&mtk_crtc->force_high_step, 1);
+
+			/* disable dsi underrun irq*/
+			en = 0;
+			mtk_ddp_comp_io_cmd(&dsi->ddp_comp, NULL, IRQ_UNDERRUN, &en);
 		}
 
 		//if (status & INP_UNFINISH_INT_EN)
@@ -4421,6 +4444,7 @@ static int mtk_dsi_start_vdo_mode(struct mtk_ddp_comp *comp, void *handle)
 		else
 			vid_mode = SYNC_EVENT_MODE;
 	}
+	DDPMSG("%s, vid_mode:%d\n", __func__, vid_mode);
 
 	setvdo[4] = (unsigned char)vid_mode;
 
@@ -7025,6 +7049,9 @@ static ssize_t mtk_dsi_host_transfer(struct mipi_dsi_host *host,
 	void *src_addr;
 	u8 irq_flag;
 
+	DDPINFO("%s, msg type:%d tx_len:%d rx_len:%d\n",
+			__func__, msg->type, msg->tx_len, msg->rx_len);
+
 	if (readl(dsi->regs + DSI_MODE_CTRL) & MODE)
 		irq_flag = VM_CMD_DONE_INT_EN;
 	else
@@ -8730,13 +8757,21 @@ static int mtk_dsi_io_cmd(struct mtk_ddp_comp *comp, struct cmdq_pkt *handle,
 	case IRQ_LEVEL_ALL:
 	{
 		unsigned int inten;
+		int index = 0;
 
 		if (!handle) {
 			DDPPR_ERR("GCE handle is NULL\n");
 			return 0;
 		}
 
-		inten = BUFFER_UNDERRUN_INT_FLAG | INP_UNFINISH_INT_EN;
+		if (atomic_read(&comp->mtk_crtc->force_high_step) == 1) {
+			DDPMSG("IRQ_LEVEL_ALL force_high_step = 1, skip underrun irq\n");
+			inten = INP_UNFINISH_INT_EN;
+			index = drm_crtc_index(&comp->mtk_crtc->base);
+			CRTC_MMP_MARK(index, dsi_underrun_irq, 0, 3);
+		} else {
+			inten = BUFFER_UNDERRUN_INT_FLAG | INP_UNFINISH_INT_EN;
+		}
 
 		cmdq_pkt_write(handle, comp->cmdq_base,
 			comp->regs_pa + DSI_INTSTA, 0x0, ~0);
@@ -8765,16 +8800,24 @@ static int mtk_dsi_io_cmd(struct mtk_ddp_comp *comp, struct cmdq_pkt *handle,
 	case IRQ_LEVEL_NORMAL:
 	{
 		unsigned int inten;
+		int index = 0;
 
 		if (!handle) {
 			DDPPR_ERR("GCE handle is NULL\n");
 			return 0;
 		}
 
-		inten = BUFFER_UNDERRUN_INT_FLAG;
-
 		cmdq_pkt_write(handle, comp->cmdq_base,
 			comp->regs_pa + DSI_INTSTA, 0x0, ~0);
+
+		if (atomic_read(&comp->mtk_crtc->force_high_step) == 1) {
+			DDPMSG("IRQ_LEVEL_NORMAL force_high_step = 1, skip underrun irq\n");
+			index = drm_crtc_index(&comp->mtk_crtc->base);
+			CRTC_MMP_MARK(index, dsi_underrun_irq, 0, 2);
+		} else {
+			inten = BUFFER_UNDERRUN_INT_FLAG;
+		}
+
 		if (!mtk_dsi_is_cmd_mode(&dsi->ddp_comp)) {
 			inten |= FRAME_DONE_INT_FLAG;
 			cmdq_pkt_write(handle, comp->cmdq_base,
@@ -8795,6 +8838,24 @@ static int mtk_dsi_io_cmd(struct mtk_ddp_comp *comp, struct cmdq_pkt *handle,
 					comp->regs_pa + DSI_INTEN, inten, inten);
 			}
 		}
+	}
+		break;
+	case IRQ_UNDERRUN:
+	{
+		bool *en = (bool *)params;
+		unsigned int reg;
+		int index = 0;
+
+		DDPMSG("IRQ_UNDERRUN %d\n", *en);
+		index = drm_crtc_index(&comp->mtk_crtc->base);
+		CRTC_MMP_MARK(index, dsi_underrun_irq, *en, 0);
+
+		if (*en)
+			reg = readl_relaxed(comp->regs + DSI_INTEN) | BUFFER_UNDERRUN_INT_FLAG;
+		else
+			reg = readl_relaxed(comp->regs + DSI_INTEN) & ~BUFFER_UNDERRUN_INT_FLAG;
+
+		writel_relaxed(reg, comp->regs + DSI_INTEN);
 	}
 		break;
 	case LCM_RESET:

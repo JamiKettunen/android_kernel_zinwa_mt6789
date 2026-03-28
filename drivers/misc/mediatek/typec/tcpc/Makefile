@@ -1,6 +1,7 @@
 subdir-ccflags-y += -Wall -Werror
 subdir-ccflags-y += -I$(srctree)/drivers/power/supply/
 subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/rt-regmap/
+subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
 subdir-ccflags-y += -I$(srctree)/drivers/mfd/
 
 obj-$(CONFIG_TCPC_MT6360)		+= tcpc_mt6360.o
@@ -8,7 +9,7 @@ obj-$(CONFIG_TCPC_MT6362)		+= tcpc_mt6362.o
 obj-$(CONFIG_TCPC_MT6370)		+= tcpc_mt6370.o
 obj-$(CONFIG_TCPC_MT6375)		+= tcpc_mt6375.o
 obj-$(CONFIG_TCPC_RT1711H)		+= tcpc_rt1711h.o
-
+obj-$(CONFIG_TCPC_UPM7610)		+= tcpc_upm7610.o
 tcpc_class-objs := tcpci_core.o tcpci_typec.o tcpci_timer.o tcpm.o tcpci.o tcpci_alert.o
 
 ifdef CONFIG_USB_POWER_DELIVERY
