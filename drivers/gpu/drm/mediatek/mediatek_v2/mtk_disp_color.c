@@ -3397,6 +3397,7 @@ static void ddp_color_restore(struct mtk_ddp_comp *comp)
 static void mtk_color_prepare(struct mtk_ddp_comp *comp)
 {
 	struct mtk_disp_color *color = comp_to_color(comp);
+	bool is_color_restore = (g_color_backup.COLOR_CFG_MAIN != 0);
 
 	mtk_ddp_comp_clk_prepare(comp);
 	atomic_set(&g_color_is_clock_on[index_of_color(comp->id)], 1);
@@ -3407,7 +3408,8 @@ static void mtk_color_prepare(struct mtk_ddp_comp *comp)
 			DISP_COLOR_SHADOW_CTRL, COLOR_BYPASS_SHADOW);
 
 	// restore DISP_COLOR_CFG_MAIN register
-	ddp_color_restore(comp);
+	if (is_color_restore)
+		ddp_color_restore(comp);
 }
 
 static void mtk_color_unprepare(struct mtk_ddp_comp *comp)
@@ -3576,8 +3578,8 @@ static const struct mtk_disp_color_data mt6761_color_driver_data = {
 	.color_offset = DISP_COLOR_START_MT6761,
 	.support_color21 = true,
 	.support_color30 = true,
-	.reg_table = {0x1400E000, 0x1400F000, 0x14001000,
-			0x14011000, 0x14012000},
+	.reg_table = {0x1400F000, 0x14010000, 0x14011000,
+			0x14012000, 0x14013000},
 	.color_window = 0x40185E57,
 	.support_shadow = false,
 	.need_bypass_shadow = false,
@@ -3589,8 +3591,8 @@ static const struct mtk_disp_color_data mt6768_color_driver_data = {
 	.color_offset = DISP_COLOR_START_MT6768,
 	.support_color21 = true,
 	.support_color30 = true,
-	.reg_table = {0x1400E000, 0x1400F000, 0x14001000,
-			0x14011000, 0x14012000},
+	.reg_table = {0x1400F000, 0x14010000, 0x14011000,
+			0x14012000, 0x14013000},
 	.color_window = 0x40185E57,
 	.support_shadow = false,
 	.need_bypass_shadow = false,

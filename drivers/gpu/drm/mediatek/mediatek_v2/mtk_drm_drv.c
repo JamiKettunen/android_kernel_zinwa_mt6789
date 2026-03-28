@@ -2040,11 +2040,14 @@ static const enum mtk_ddp_comp_id mt6779_mtk_ddp_main_wb_path[] = {
 static const enum mtk_ddp_comp_id mt6885_mtk_ddp_main[] = {
 	DDP_COMPONENT_OVL0_2L,		DDP_COMPONENT_OVL0,
 	DDP_COMPONENT_OVL0_VIRTUAL0,	DDP_COMPONENT_RDMA0,
-	DDP_COMPONENT_RDMA0_VIRTUAL0,	DDP_COMPONENT_COLOR0,
+	DDP_COMPONENT_RDMA0_VIRTUAL0,
+#ifndef DRM_BYPASS_PQ
+	DDP_COMPONENT_COLOR0,
 	DDP_COMPONENT_CCORR0,
 	DDP_COMPONENT_DMDP_AAL0,
 	DDP_COMPONENT_AAL0,		DDP_COMPONENT_GAMMA0,
 	DDP_COMPONENT_POSTMASK0,	DDP_COMPONENT_DITHER0,
+#endif
 	DDP_COMPONENT_DSI0,		DDP_COMPONENT_PWM0,
 };
 
@@ -5619,10 +5622,12 @@ static const struct drm_ioctl_desc mtk_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(MTK_FACTORY_LCM_AUTO_TEST, mtk_drm_fm_lcm_auto_test,
 			  DRM_UNLOCKED),
 #endif
+#ifndef DRM_BYPASS_PQ
 	DRM_IOCTL_DEF_DRV(MTK_GET_PQ_CAPS, mtk_drm_ioctl_get_pq_caps,
 			  DRM_UNLOCKED),
 	DRM_IOCTL_DEF_DRV(MTK_SET_PQ_CAPS, mtk_drm_ioctl_set_pq_caps,
 			  DRM_UNLOCKED),
+#endif
 	DRM_IOCTL_DEF_DRV(MTK_SEC_HND_TO_GEM_HND, mtk_drm_sec_hnd_to_gem_hnd,
 			DRM_UNLOCKED | DRM_AUTH | DRM_RENDER_ALLOW),
 };

@@ -20,6 +20,9 @@
 #define ST21NFC_GET_POLARITY _IO(ST21NFC_MAGIC, 0x07)
 #define ST21NFC_RECOVERY _IO(ST21NFC_MAGIC, 0x08)
 #define ST21NFC_USE_ESE _IOW(ST21NFC_MAGIC, 0x09, unsigned int)
+#define ST21NFC_CLK_ENABLE _IOR(ST21NFC_MAGIC, 0x11, unsigned int)
+#define ST21NFC_CLK_DISABLE _IOR(ST21NFC_MAGIC, 0x12, unsigned int)
+#define ST21NFC_CLK_STATE _IOR(ST21NFC_MAGIC, 0x13, unsigned int)
 
 // Keep compatibility with older user applications.
 #define ST21NFC_LEGACY_GET_WAKEUP _IOR(ST21NFC_MAGIC, 0x01, unsigned int)

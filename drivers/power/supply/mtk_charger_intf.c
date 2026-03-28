@@ -175,6 +175,7 @@ int get_battery_current(struct mtk_charger *info)
 		ret);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(get_battery_current);
 
 static int get_pmic_vbus(struct mtk_charger *info, int *vchr)
 {

@@ -15,6 +15,10 @@
 char mtk_ccm_name[camera_info_size] = { 0 };
 char mtk_i2c_dump[camera_info_size] = { 0 };
 
+extern struct IMGSENSOR *pgimgsensor;
+#define PROC_NAME	"hodafone_cam"
+char hodafoneSensorNameStr[HODAFONE_MAX_INVOKE_DRIVERS][32] = {"no_sensor","no_sensor","no_sensor","no_sensor"};
+
 static int pdaf_type_info_read(struct seq_file *m, void *v)
 {
 #define bufsz 512
@@ -644,6 +648,47 @@ static const struct proc_ops fcamera_proc_fops_status_info = {
 	.proc_open  = imgsensor_proc_status_info_open,
 	.proc_read = seq_read,
 };
+/*add by hodafone @ @20140618 at 12:56 begin*/
+static int cam_debug_read(struct seq_file *m, void *v)                     
+{
+	char sensor_name[IMGSENSOR_STATUS_INFO_LENGTH];
+	int length = 0;
+	
+	if (strcmp(hodafoneSensorNameStr[0],"no_sensor")) {
+		length += sprintf(sensor_name+length,"%s[main] ",hodafoneSensorNameStr[0]);
+	}
+	
+	if (strcmp(hodafoneSensorNameStr[1],"no_sensor")) {
+		length += sprintf(sensor_name+length,"%s[sub] ",hodafoneSensorNameStr[1]);
+	}
+	
+	if (strcmp(hodafoneSensorNameStr[2],"no_sensor")) {
+		length += sprintf(sensor_name+length,"%s[wideangle] ",hodafoneSensorNameStr[2]);
+	}
+	
+	if (strcmp(hodafoneSensorNameStr[3],"no_sensor")) {
+		length += sprintf(sensor_name+length,"%s[marco] ",hodafoneSensorNameStr[3]);
+	}
+	
+	if (length < IMGSENSOR_STATUS_INFO_LENGTH) {
+		sensor_name[length] = '\0';
+	}
+	
+	seq_printf(m, "%s\n", sensor_name);
+	return 0;
+}
+
+static int proc_hodafone_cam_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, cam_debug_read, NULL);
+};
+
+static const struct proc_ops hodafone_cam_fops = {
+	.proc_open  = proc_hodafone_cam_open,
+	.proc_read  = seq_read,
+};
+/*add by hodafone @ @20140618 at 12:56 end*/
+
 
 enum IMGSENSOR_RETURN imgsensor_proc_init(void)
 {
@@ -661,7 +706,9 @@ enum IMGSENSOR_RETURN imgsensor_proc_init(void)
 				&fcamera_proc_fops_set_pdaf_type);
 	proc_create("driver/imgsensor_status_info", 0000, NULL,
 				&fcamera_proc_fops_status_info);
-
+    /*add by hodafone @ @20140618 at 12:56 begin*/
+	proc_create(PROC_NAME, 0777, NULL,&hodafone_cam_fops);
+	/*add by hodafone @ @20140618 at 12:56 end*/
 	/* Camera information */
 	proc_create(PROC_CAMERA_INFO, 0000, NULL, &fcamera_proc_fops1);
 

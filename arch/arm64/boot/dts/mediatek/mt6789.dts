@@ -4809,7 +4809,7 @@
 			reg = <0 0x1400c000 0 0x1000>;
 			interrupts = <GIC_SPI 294 IRQ_TYPE_LEVEL_HIGH 0>;
 			clocks = <&dispsys_config_clk CLK_MM_DISP_AAL0>;
-			mtk_aal_support = <1>;
+			mtk_aal_support = <0>;
 			mtk_dre30_support = <0>;
 		};
 
@@ -6522,7 +6522,7 @@
 		max_dmivr_charger_current = <1800000>;
 
 		/* fast charging algo support indicator */
-		enable_fast_charging_indicator;
+		/* enable_fast_charging_indicator; */
 	};
 
 	rt-pd-manager {
@@ -6842,7 +6842,7 @@
 };
 
 &i2c5 {
-	clock-frequency = <1000000>;
+	clock-frequency = <400000>;
 	mt6375: mt6375@34 {
 		compatible = "mediatek,mt6375";
 		reg = <0x34>;
@@ -7065,26 +7065,11 @@
 	};
 };
 
-&i2c6 {
-	gate_ic: gate_ic@11 {
-		compatible = "mediatek,gate-ic-i2c";
-		gate-power-gpios = <&pio 12 0>;
-		reg = <0x11>;
-		id = <6>;
-		status = "okay";
-	};
-};
-
 #include "mediatek/cust_mt6789_msdc.dtsi"
 #include "mediatek/mt6366.dtsi"
-#include "mediatek/rt5133.dtsi"
+#include "mediatek/wl2868c.dtsi"
 #include "mediatek/mt6789-clkitg.dtsi"
 #include "mediatek/mt6789-disable-unused.dtsi"
-
-&rt5133 {
-	interrupts-extended = <&pio 5 0x0>;
-	enable-gpio = <&pio 15 0x0>;
-};
 
 &pmic {
 	interrupt-parent = <&pio>;
@@ -7300,3 +7285,4 @@
 	};
 };
 #include "mediatek/trusty.dtsi"
+#include "mediatek/hodafone/hodafone.dtsi"

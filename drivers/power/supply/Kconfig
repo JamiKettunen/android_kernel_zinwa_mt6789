@@ -693,6 +693,28 @@ config CHARGER_BQ2589X
 	  bq2589x charger IC Battery Charger. The base name for this driver is
 	  'bq2589x_charger.c'.
 
+config CHARGER_UPM6922
+	tristate "UPM6922 battery charger driver"
+	depends on I2C
+	depends on GPIOLIB || COMPILE_TEST
+	select REGMAP_I2C
+	help
+	  This adds support for charger IC upm6922.
+	  Say Y to include support for Texas Instruments
+	  upm6922 charger IC Battery Charger. The base name for this driver is
+	  'upm69225_charger.c'.
+
+config CHARGER_UPM6722
+	tristate "UPM6722 battery charger driver"
+	depends on I2C
+	depends on GPIOLIB || COMPILE_TEST
+	select REGMAP_I2C
+	help
+	  This adds support for charger IC upm6722.
+	  Say Y to include support for Texas Instruments
+	  upm6722 charger IC Battery Charger. The base name for this driver is
+	  'upm6722.c'.
+
 config CHARGER_SMB347
 	tristate "Summit Microelectronics SMB3XX Battery Charger"
 	depends on I2C
@@ -1014,5 +1036,13 @@ config GAUGE_MT6983_ALPHA_SUPPORT
 	  To compile this dirver for used touch IC.
 	  Set Y or M to select this feature for specific platform-mt6983,
 	  and set N to disable.
+
+config HODAFONE_BATTERY_SUPPORT
+	tristate "Hodafone Charging Support"
+	help
+	  Say yes here to enable Hodafone charging driver.
+	  This driver contains charging control flow and
+	  maintains charging status.
+	  Say no if not using Hodafone charging driver.
 
 endif # POWER_SUPPLY

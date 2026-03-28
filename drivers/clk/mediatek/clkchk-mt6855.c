@@ -26,6 +26,8 @@
 #define BUG_ON_CHK_ENABLE		0
 #define CHECK_VCORE_FREQ		0
 
+static unsigned int suspend_cnt;
+
 /*
  * clkchk dump_regs
  */
@@ -448,6 +450,22 @@ static bool is_pll_chk_bug_on(void)
 	return false;
 }
 
+static bool suspend_retry(bool reset_cnt)
+{
+	if (reset_cnt == true) {
+		suspend_cnt = 0;
+		return true;
+	}
+
+	suspend_cnt++;
+	pr_notice("%s: suspend cnt: %d\n", __func__, suspend_cnt);
+
+	if (suspend_cnt < 2)
+		return false;
+
+	return true;
+}
+
 /*
  * init functions
  */
@@ -462,10 +480,13 @@ static struct clkchk_ops clkchk_mt6855_ops = {
 	.get_vf_table = get_vf_table,
 	.get_vcore_opp = get_vcore_opp,
 	.devapc_dump = devapc_dump,
+	.suspend_retry = suspend_retry,
 };
 
 static int clk_chk_mt6855_probe(struct platform_device *pdev)
 {
+	suspend_cnt = 0;
+
 	init_regbase();
 
 	set_clkchk_ops(&clkchk_mt6855_ops);

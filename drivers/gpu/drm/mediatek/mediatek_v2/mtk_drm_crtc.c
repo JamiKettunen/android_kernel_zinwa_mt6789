@@ -1770,6 +1770,11 @@ static void mtk_crtc_cwb_set_sec(struct drm_crtc *crtc)
 			cwb_info->is_sec = true;
 		}
 	}
+	if (mtk_crtc->sec_on) {
+		DDPINFO("%s:%d skip cwb addon connect due to sec on\n",
+				__func__, __LINE__);
+		cwb_info->is_sec = true;
+	}
 }
 
 static void calc_mml_config(struct drm_crtc *crtc,
@@ -2203,6 +2208,12 @@ _mtk_crtc_wb_addon_module_connect(
 	if (index != 0 || mtk_crtc_is_dc_mode(crtc) ||
 		!state->prop_val[CRTC_PROP_OUTPUT_ENABLE])
 		return;
+
+	if (mtk_crtc->sec_on) {
+		DDPINFO("%s:%d skip wb addon connect due to sec on\n",
+				__func__, __LINE__);
+		return;
+	}
 
 	addon_data = mtk_addon_get_scenario_data(__func__, crtc,
 						WDMA_WRITE_BACK_OVL);
@@ -3092,6 +3103,7 @@ static void mtk_crtc_update_hrt_state(struct drm_crtc *crtc,
 	struct drm_display_mode *mode = NULL;
 	unsigned int max_fps = 0;
 	struct mtk_drm_private *priv = crtc->dev->dev_private;
+	int en = 0;
 
 	DDPINFO("%s bw=%d, last_hrt_req=%d, overlap=%d\n",
 			__func__, bw, mtk_crtc->qos_ctx->last_hrt_req, frame_weight);
@@ -3112,11 +3124,23 @@ static void mtk_crtc_update_hrt_state(struct drm_crtc *crtc,
 			int en = 1;
 
 			output_comp = mtk_ddp_comp_request_output(mtk_crtc);
-			if (output_comp)
+			if (output_comp) {
+				DDPMSG("set MMCLK back, and enable underrun irq\n");
 				mtk_ddp_comp_io_cmd(output_comp, NULL, SET_MMCLK_BY_DATARATE, &en);
+				mtk_ddp_comp_io_cmd(output_comp, NULL, IRQ_UNDERRUN, &en);
+			}
 			atomic_set(&mtk_crtc->force_high_step, 0);
 		}
 	} else {
+		if (mtk_crtc->force_high_enabled != 0) {
+			en = 1;
+			output_comp = mtk_ddp_comp_request_output(mtk_crtc);
+			if (output_comp) {
+				/* enable dsi underrun irq*/
+				DDPMSG("enable underrun irq after force_high_step set to 0\n");
+				mtk_ddp_comp_io_cmd(output_comp, NULL, IRQ_UNDERRUN, &en);
+			}
+		}
 		mtk_crtc->force_high_enabled = 0;
 	}
 
@@ -7607,15 +7631,22 @@ int mtk_crtc_check_out_sec(struct drm_crtc *crtc)
 }
 
 /*====for MTEE SVP=====*/
+static int is_tzmp2_enabled = -1;
 bool is_tzmp2_enable(void)
 {
-	struct device_node *dt_node;
+	if (is_tzmp2_enabled == -1) {
+		struct device_node *dt_node;
 
-	dt_node = of_find_node_by_name(NULL, TZMP2_DT_NAME);
-	if (!dt_node)
-		return false;
-
-	return true;
+		dt_node = of_find_node_by_name(NULL, TZMP2_DT_NAME);
+		if (!dt_node)
+			is_tzmp2_enabled = 0;
+		else
+			is_tzmp2_enabled = 1;
+		DDPINFO("%s: is_tzmp2_enabled = %d", __func__, is_tzmp2_enabled);
+	}
+	if (is_tzmp2_enabled == 1)
+		return true;
+	return false;
 }
 
 static int mtk_mtee_sec_flow_by_cmdq(struct cmdq_pkt *cmdq_handle, struct mtk_ddp_comp *comp,
@@ -9420,8 +9451,10 @@ int mtk_crtc_gce_flush(struct drm_crtc *crtc, void *gce_cb,
 		wb_cb_data = kmalloc(sizeof(*wb_cb_data), GFP_KERNEL);
 
 		mtk_crtc_pkt_create(&handle, crtc, client);
-		cmdq_pkt_wfe(handle, mtk_crtc->gce_obj.event[EVENT_WDMA0_EOF]);
-		_mtk_crtc_wb_addon_module_disconnect(crtc, mtk_crtc->ddp_mode, handle);
+		if (!mtk_crtc->sec_on) {
+			cmdq_pkt_wfe(handle, mtk_crtc->gce_obj.event[EVENT_WDMA0_EOF]);
+			_mtk_crtc_wb_addon_module_disconnect(crtc, mtk_crtc->ddp_mode, handle);
+		}
 
 		wb_cb_data->cmdq_handle = handle;
 		wb_cb_data->crtc = crtc;

@@ -103,6 +103,7 @@ struct st54spi_data {
 	unsigned int users;
 	u8 *tx_buffer;
 	u8 *rx_buffer;
+	u8 *null_buffer;
 	u32 speed_hz;
 
 	/* GPIO for SE_POWER_REQ / SE_nRESET */
@@ -178,6 +179,7 @@ static inline ssize_t st54spi_sync_read(struct st54spi_data *st54spi,
 {
 	struct spi_transfer t = {
 		.rx_buf = st54spi->rx_buffer,
+		.tx_buf = st54spi->null_buffer,
 		.len = len,
 		.speed_hz = st54spi->speed_hz,
 	};
@@ -186,6 +188,7 @@ static inline ssize_t st54spi_sync_read(struct st54spi_data *st54spi,
 	spi_message_init(&m);
 	spi_message_add_tail(&t, &m);
 	return st54spi_sync(st54spi, &m);
+
 }
 
 /*-------------------------------------------------------------------------*/
@@ -204,7 +207,7 @@ static ssize_t st54spi_read(struct file *filp, char __user *buf, size_t count,
 	st54spi = filp->private_data;
 
 	if (debug_enabled)
-		dev_info(DEV, "st54spi Read: %d bytes\n", count);
+		dev_info(DEV, "st54spi Read: %zu bytes\n", count);
 
 	mutex_lock(&st54spi->buf_lock);
 	status = st54spi_sync_read(st54spi, count);
@@ -220,7 +223,7 @@ static ssize_t st54spi_read(struct file *filp, char __user *buf, size_t count,
 	mutex_unlock(&st54spi->buf_lock);
 
 	if (debug_enabled)
-		dev_info(DEV, "st54spi Read: status: %d\n", status);
+		dev_info(DEV, "st54spi Read: status: %zd\n", status);
 
 	return status;
 }
@@ -240,7 +243,7 @@ static ssize_t st54spi_write(struct file *filp, const char __user *buf,
 	st54spi = filp->private_data;
 
 	if (debug_enabled)
-		dev_info(DEV, "st54spi Write: %d bytes\n", count);
+		dev_info(DEV, "st54spi Write: %zu bytes\n", count);
 
 	mutex_lock(&st54spi->buf_lock);
 	missing = copy_from_user(st54spi->tx_buffer, buf, count);
@@ -251,7 +254,7 @@ static ssize_t st54spi_write(struct file *filp, const char __user *buf,
 	mutex_unlock(&st54spi->buf_lock);
 
 	if (debug_enabled)
-		dev_info(DEV, "st54spi Write: status: %d\n", status);
+		dev_info(DEV, "st54spi Write: status: %zd\n", status);
 
 	return status;
 }
@@ -427,33 +430,33 @@ static void st54spi_power_off(struct st54spi_data *st54spi)
 		ret = pinctrl_select_state(st54spi->pctrl,
 					   st54spi->pctrl_mode_spi_csb_idle);
 		if (ret < 0) {
-			dev_info(DEV,
+			dev_err(DEV,
 				"%s : change SPI management(CSB) to High Z failed!\n",
 				__func__);
 		}
 		ret = pinctrl_select_state(st54spi->pctrl,
 					   st54spi->pctrl_mode_spi_clk_idle);
 		if (ret < 0) {
-			dev_info(DEV,
+			dev_err(DEV,
 				"%s : change SPI management(CLK) to High Z failed!\n",
 				__func__);
 		}
 		ret = pinctrl_select_state(st54spi->pctrl,
 					   st54spi->pctrl_mode_spi_mi_idle);
 		if (ret < 0) {
-			dev_info(DEV,
+			dev_err(DEV,
 				"%s : change SPI management(MI) to High Z failed!\n",
 				__func__);
 		}
 		ret = pinctrl_select_state(st54spi->pctrl,
 					   st54spi->pctrl_mode_spi_mo_idle);
 		if (ret < 0) {
-			dev_info(DEV,
+			dev_err(DEV,
 				"%s : change SPI management(MO) to High Z failed!\n",
 				__func__);
 		}
 #else // ST54H_SUPPORTED
-		dev_info(DEV, "%s : ST54H is not supported\n", __func__);
+		dev_err(DEV, "%s : ST54H is not supported\n", __func__);
 #endif // ST54H_SUPPORTED
 	}
 
@@ -517,7 +520,7 @@ static void st54spi_power_on(struct st54spi_data *st54spi)
 					   st54spi->pctrl_mode_spi_csb);
 
 		if (ret < 0) {
-			dev_info(DEV,
+			dev_err(DEV,
 				"%s : change management to SPI-CSB failed!\n",
 				__func__);
 		}
@@ -526,7 +529,7 @@ static void st54spi_power_on(struct st54spi_data *st54spi)
 					   st54spi->pctrl_mode_spi_clk);
 
 		if (ret < 0) {
-			dev_info(DEV,
+			dev_err(DEV,
 				"%s : change management to SPI-CLK failed!\n",
 				__func__);
 		}
@@ -535,7 +538,7 @@ static void st54spi_power_on(struct st54spi_data *st54spi)
 					   st54spi->pctrl_mode_spi_mi);
 
 		if (ret < 0) {
-			dev_info(DEV,
+			dev_err(DEV,
 				"%s : change management to SPI-MI failed!\n",
 				__func__);
 		}
@@ -544,12 +547,12 @@ static void st54spi_power_on(struct st54spi_data *st54spi)
 					   st54spi->pctrl_mode_spi_mo);
 
 		if (ret < 0) {
-			dev_info(DEV,
+			dev_err(DEV,
 				"%s : change management to SPI-MO failed!\n",
 				__func__);
 		}
 #else // ST54H_SUPPORTED
-		dev_info(DEV, "%s : ST54H is not supported\n", __func__);
+		dev_err(DEV, "%s : ST54H is not supported\n", __func__);
 #endif // ST54H_SUPPORTED
 	}
 
@@ -877,7 +880,7 @@ static int st54spi_open(struct inode *inode, struct file *filp)
 
 	mutex_lock(&device_list_lock);
 
-	list_for_each_entry(st54spi, &device_list, device_entry) {
+	list_for_each_entry (st54spi, &device_list, device_entry) {
 		if (st54spi->devt == inode->i_rdev) {
 			status = 0;
 			break;
@@ -891,7 +894,7 @@ static int st54spi_open(struct inode *inode, struct file *filp)
 
 	// Authorize only 1 process to open the device.
 	if (st54spi->users > 0) {
-		dev_info(DEV, "%d: already open\n");
+		dev_err(DEV, "st54spi: already open\n");
 		mutex_unlock(&device_list_lock);
 		return -EBUSY;
 	}
@@ -917,6 +920,14 @@ static int st54spi_open(struct inode *inode, struct file *filp)
 		}
 	}
 
+	if (!st54spi->null_buffer) {
+		st54spi->null_buffer = kzalloc(bufsiz, GFP_KERNEL);
+		if (!st54spi->null_buffer) {
+			status = -ENOMEM;
+			goto err_alloc_null_buf;
+		}
+	}
+
 	st54spi->users++;
 	filp->private_data = st54spi;
 	nonseekable_open(inode, filp);
@@ -929,6 +940,9 @@ static int st54spi_open(struct inode *inode, struct file *filp)
 	st54spi_power_on_for_comm(st54spi);
 	return 0;
 
+err_alloc_null_buf:
+	kfree(st54spi->rx_buffer);
+	st54spi->rx_buffer = NULL;
 err_alloc_rx_buf:
 	kfree(st54spi->tx_buffer);
 	st54spi->tx_buffer = NULL;
@@ -1073,14 +1087,14 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 			dev_info(dev, "%s: Power mode: ST54H\n", __FILE__);
 			pdata->power_or_nreset_gpio_mode = POWER_MODE_ST54H;
 #else // ST54H_SUPPORTED
-			dev_info(dev, "%s : ST54H is not supported\n", __func__);
+			dev_err(dev, "%s : ST54H is not supported\n", __func__);
 			return -EINVAL;
 #endif // ST54H_SUPPORTED
 		} else if (!strcmp(power_mode, "none")) {
 			dev_info(dev, "%s: Power mode: none\n", __FILE__);
 			pdata->power_or_nreset_gpio_mode = POWER_MODE_NONE;
 		} else {
-			dev_info(dev, "%s: Power mode unknown: %s\n", __FILE__,
+			dev_err(dev, "%s: Power mode unknown: %s\n", __FILE__,
 				power_mode);
 			return -EINVAL;
 		}
@@ -1094,7 +1108,7 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 #ifdef ST54H_SUPPORTED
 		pdata->pctrl = devm_pinctrl_get(dev);
 		if (IS_ERR(pdata->pctrl)) {
-			dev_info(dev, "%s: Unable to allocate pinctrl: %d\n",
+			dev_err(dev, "%s: Unable to allocate pinctrl: %d\n",
 				__FILE__, PTR_ERR(pdata->pctrl));
 			return -EINVAL;
 		}
@@ -1103,7 +1117,7 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 			pdata->pctrl, "pinctrl_nfc_spi_csb");
 
 		if (IS_ERR(pdata->pctrl_mode_spi_csb)) {
-			dev_info(dev,
+			dev_err(dev,
 				"%s: Unable to find pinctrl_nfc_spi_csb: %d\n",
 				__FILE__, PTR_ERR(pdata->pctrl_mode_spi_csb));
 			return -EINVAL;
@@ -1113,7 +1127,7 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 			pdata->pctrl, "pinctrl_nfc_spi_clk");
 
 		if (IS_ERR(pdata->pctrl_mode_spi_clk)) {
-			dev_info(dev,
+			dev_err(dev,
 				"%s: Unable to find pinctrl_nfc_spi_clk: %d\n",
 				__FILE__, PTR_ERR(pdata->pctrl_mode_spi_clk));
 			return -EINVAL;
@@ -1123,7 +1137,7 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 			pdata->pctrl, "pinctrl_nfc_spi_mi");
 
 		if (IS_ERR(pdata->pctrl_mode_spi_mi)) {
-			dev_info(dev,
+			dev_err(dev,
 				"%s: Unable to find pinctrl_nfc_spi_mi: %d\n",
 				__FILE__, PTR_ERR(pdata->pctrl_mode_spi_mi));
 			return -EINVAL;
@@ -1133,7 +1147,7 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 			pdata->pctrl, "pinctrl_nfc_spi_mo");
 
 		if (IS_ERR(pdata->pctrl_mode_spi_mo)) {
-			dev_info(dev,
+			dev_err(dev,
 				"%s: Unable to find pinctrl_nfc_spi_mo: %d\n",
 				__FILE__, PTR_ERR(pdata->pctrl_mode_spi_mo));
 			return -EINVAL;
@@ -1144,7 +1158,7 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 			pdata->pctrl, "pinctrl_nfc_spi_csb_idle");
 
 		if (IS_ERR(pdata->pctrl_mode_spi_csb_idle)) {
-			dev_info(dev,
+			dev_err(dev,
 				"%s: Unable to find pinctrl_nfc_spi_csb_idle: %d\n",
 				__FILE__,
 				PTR_ERR(pdata->pctrl_mode_spi_csb_idle));
@@ -1155,7 +1169,7 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 			pdata->pctrl, "pinctrl_nfc_spi_clk_idle");
 
 		if (IS_ERR(pdata->pctrl_mode_spi_clk_idle)) {
-			dev_info(dev,
+			dev_err(dev,
 				"%s: Unable to find pinctrl_nfc_spi_clk_idle: %d\n",
 				__FILE__,
 				PTR_ERR(pdata->pctrl_mode_spi_clk_idle));
@@ -1166,7 +1180,7 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 			pdata->pctrl, "pinctrl_nfc_spi_mi_idle");
 
 		if (IS_ERR(pdata->pctrl_mode_spi_mi_idle)) {
-			dev_info(dev,
+			dev_err(dev,
 				"%s: Unable to find pinctrl_nfc_spi_mi_idle: %d\n",
 				__FILE__,
 				PTR_ERR(pdata->pctrl_mode_spi_mi_idle));
@@ -1177,7 +1191,7 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 			pdata->pctrl, "pinctrl_nfc_spi_mo_idle");
 
 		if (IS_ERR(pdata->pctrl_mode_spi_mo_idle)) {
-			dev_info(dev,
+			dev_err(dev,
 				"%s: Unable to find pinctrl_nfc_spi_mo_idle: %d\n",
 				__FILE__,
 				PTR_ERR(pdata->pctrl_mode_spi_mo_idle));
@@ -1186,7 +1200,7 @@ static int st54spi_parse_dt(struct device *dev, struct st54spi_data *pdata)
 
 		dev_info(dev, "[dsc]%s : pinctrl initialized\n", __func__);
 #else // ST54H_SUPPORTED
-		dev_info(dev, "%s : ST54H is not supported\n", __func__);
+		dev_err(dev, "%s : ST54H is not supported\n", __func__);
 #endif // ST54H_SUPPORTED
 	}
 
@@ -1380,7 +1394,7 @@ static int st54spi_probe(struct spi_device *spi)
 			 __func__, st54spi);
 		st21nfc_register_st54spi_cb(st54spi_st21nfc_cb, st54spi);
 #else
-		dev_info(&spi->dev,
+		dev_err(&spi->dev,
 			"%s : st54spi as module cannot use ST54H fully\n",
 			__func__);
 #endif
@@ -1411,8 +1425,12 @@ static int st54spi_remove(struct spi_device *spi)
 	list_del(&st54spi->device_entry);
 	device_destroy(st54spi_class, st54spi->devt);
 	clear_bit(MINOR(st54spi->devt), minors);
-	if (st54spi->users == 0)
+	if (st54spi->users == 0) {
+		kfree(st54spi->tx_buffer);
+		kfree(st54spi->rx_buffer);
+		kfree(st54spi->null_buffer);
 		kfree(st54spi);
+	}
 
 	mutex_unlock(&device_list_lock);
 
@@ -1420,7 +1438,8 @@ static int st54spi_remove(struct spi_device *spi)
 }
 
 static struct spi_driver st54spi_spi_driver = {
-	.driver = {
+	.driver =
+		{
 			.name = "st54spi",
 			.of_match_table = of_match_ptr(st54spi_dt_ids),
 			.acpi_match_table = ACPI_PTR(st54spi_acpi_ids),

@@ -14,3 +14,11 @@ config RT4831A_I2C
 	  Set n to disable.
 	  RT4831 I2C driver for display and backlight.
 
+config OCP2131_I2C
+	tristate "Support ocp2131 gate ic board"
+	help
+	  I2C gate driver for OCP2131 support.
+	  Set y to support.
+	  Set n to disable.
+	  OCP2131 I2C driver for display and backlight.
+

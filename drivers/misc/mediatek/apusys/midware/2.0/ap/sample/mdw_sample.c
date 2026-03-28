@@ -11,24 +11,24 @@
 
 #include "apusys_device.h"
 #include "mdw_cmn.h"
-#include "mdw_dmy.h"
+#include "mdw_sample.h"
 
-#define MDW_DMY_DEV_NUM 2
-#define MDW_DMY_UCMD_IDX 0x66
-#define MDW_DMY_UCMD_MAGIC 0x15556
-#define MDW_DMY_UCMD_UW 0x1234
-#define MDW_DMY_META_DATA "0x15556"
-#define MDW_DMY_REQ_NAME_SIZE 32
+#define MDW_SAMPLE_DEV_NUM 2
+#define MDW_SAMPLE_UCMD_IDX 0x66
+#define MDW_SAMPLE_UCMD_MAGIC 0x15556
+#define MDW_SAMPLE_UCMD_UW 0x1234
+#define MDW_SAMPLE_META_DATA "0x15556"
+#define MDW_SAMPLE_REQ_NAME_SIZE 32
 
-struct mdw_dmy_req {
-	char name[MDW_DMY_REQ_NAME_SIZE];
+struct mdw_sample_req {
+	char name[MDW_SAMPLE_REQ_NAME_SIZE];
 	uint32_t algo_id;
 	uint32_t delay_ms;
 	uint8_t driver_done;
 };
 
 /* sample driver's private structure */
-struct mdw_dmy_dev_info {
+struct mdw_sample_dev_info {
 	struct apusys_device dev;
 	uint32_t idx; // core idx
 	char name[32];
@@ -37,16 +37,16 @@ struct mdw_dmy_dev_info {
 	struct mutex mtx;
 };
 
-struct mdw_dmy_ucmd {
+struct mdw_sample_ucmd {
 	unsigned long long magic;
 	int cmd_idx;
 
 	int u_write;
 };
 
-static struct mdw_dmy_dev_info mdw_dmy_inst[MDW_DMY_DEV_NUM];
+static struct mdw_sample_dev_info mdw_sample_inst[MDW_SAMPLE_DEV_NUM];
 
-static void mdw_dmy_print_hnd(int type, void *hnd)
+static void mdw_sample_print_hnd(int type, void *hnd)
 {
 	struct apusys_cmd_handle *cmd = NULL;
 	struct apusys_power_hnd *pwr = NULL;
@@ -83,7 +83,7 @@ static void mdw_dmy_print_hnd(int type, void *hnd)
 }
 
 //----------------------------------------------
-static uint32_t mdw_dmy_get_time_diff(struct timespec64 *duration)
+static uint32_t mdw_sample_get_time_diff(struct timespec64 *duration)
 {
 	struct timespec64 now;
 	uint32_t diff = 0;
@@ -100,8 +100,8 @@ static uint32_t mdw_dmy_get_time_diff(struct timespec64 *duration)
 }
 
 //----------------------------------------------
-static int mdw_dmy_pwron(struct apusys_power_hnd *hnd,
-	struct mdw_dmy_dev_info *info)
+static int mdw_sample_pwron(struct apusys_power_hnd *hnd,
+	struct mdw_sample_dev_info *info)
 {
 	if (hnd == NULL || info == NULL)
 		return -EINVAL;
@@ -120,7 +120,7 @@ static int mdw_dmy_pwron(struct apusys_power_hnd *hnd,
 	return 0;
 }
 
-static int mdw_dmy_pwroff(struct mdw_dmy_dev_info *info)
+static int mdw_sample_pwroff(struct mdw_sample_dev_info *info)
 {
 	if (info == NULL)
 		return -EINVAL;
@@ -131,25 +131,25 @@ static int mdw_dmy_pwroff(struct mdw_dmy_dev_info *info)
 	return 0;
 }
 
-static int mdw_dmy_resume(void)
+static int mdw_sample_resume(void)
 {
 	mdw_sub_debug("resume done\n");
 
 	return 0;
 }
 
-static int mdw_dmy_suspend(void)
+static int mdw_sample_suspend(void)
 {
 	mdw_sub_debug("suspend done\n");
 
 	return 0;
 }
 
-static int mdw_dmy_exec(struct apusys_cmd_handle *hnd,
+static int mdw_sample_exec(struct apusys_cmd_handle *hnd,
 	struct apusys_device *dev)
 {
-	struct mdw_dmy_req *req = NULL;
-	struct mdw_dmy_dev_info *info = NULL;
+	struct mdw_sample_req *req = NULL;
+	struct mdw_sample_dev_info *info = NULL;
 	struct timespec64 duration;
 	uint32_t tdiff = 0;
 
@@ -162,15 +162,15 @@ static int mdw_dmy_exec(struct apusys_cmd_handle *hnd,
 		return -EINVAL;
 	}
 
-	if (hnd->cmdbufs[0].size != sizeof(struct mdw_dmy_req)) {
+	if (hnd->cmdbufs[0].size != sizeof(struct mdw_sample_req)) {
 		mdw_drv_err("command size invalid(%u)\n",
 			hnd->cmdbufs[0].size);
 		return -EINVAL;
 	}
 
 	mdw_sub_debug("multicore_total = %u\n", hnd->multicore_total);
-	req = (struct mdw_dmy_req *)hnd->cmdbufs[0].kva;
-	info = (struct mdw_dmy_dev_info *)dev->private;
+	req = (struct mdw_sample_req *)hnd->cmdbufs[0].kva;
+	info = (struct mdw_sample_dev_info *)dev->private;
 	mutex_lock(&info->mtx);
 	if (info->run != 0) {
 		mdw_drv_err("device is occupied\n");
@@ -179,19 +179,19 @@ static int mdw_dmy_exec(struct apusys_cmd_handle *hnd,
 	}
 	info->run = 1;
 
-	mdw_sub_debug("dmy-#%u request(0x%llx) (%s/0x%x/%u/%u)\n",
+	mdw_sub_debug("sample-#%u request(0x%llx) (%s/0x%x/%u/%u)\n",
 		info->idx, (uint64_t)req, req->name,
 		req->algo_id, req->delay_ms, req->driver_done);
 
 	memset(&duration, 0, sizeof(duration));
-	tdiff = mdw_dmy_get_time_diff(&duration);
+	tdiff = mdw_sample_get_time_diff(&duration);
 
 	if (req->delay_ms) {
 		mdw_sub_debug("delay %u ms\n", req->delay_ms);
 		msleep(req->delay_ms);
 	}
 
-	tdiff = mdw_dmy_get_time_diff(&duration);
+	tdiff = mdw_sample_get_time_diff(&duration);
 	hnd->ip_time = tdiff;
 
 	if (req->driver_done != 0) {
@@ -207,11 +207,11 @@ static int mdw_dmy_exec(struct apusys_cmd_handle *hnd,
 	return 0;
 }
 
-static int mdw_dmy_usr_cmd(void *hnd,
-	struct mdw_dmy_dev_info *info)
+static int mdw_sample_usr_cmd(void *hnd,
+	struct mdw_sample_dev_info *info)
 {
 	struct apusys_usercmd_hnd *u = NULL;
-	struct mdw_dmy_ucmd *s = NULL;
+	struct mdw_sample_ucmd *s = NULL;
 	int ret = 0;
 
 	if (hnd == NULL || info == NULL)
@@ -227,66 +227,78 @@ static int mdw_dmy_usr_cmd(void *hnd,
 	}
 
 	/* check cmd size */
-	if (u->size != sizeof(struct mdw_dmy_ucmd)) {
+	if (u->size != sizeof(struct mdw_sample_ucmd)) {
 		mdw_drv_err("handle size not match(%u/%lu)\n",
-			u->size, sizeof(struct mdw_dmy_ucmd));
+			u->size, sizeof(struct mdw_sample_ucmd));
 		return -EINVAL;
 	}
 
 	/* verify param sent from user space */
-	s = (struct mdw_dmy_ucmd *)u->kva;
-	if (s->cmd_idx != MDW_DMY_UCMD_IDX ||
-		s->magic != MDW_DMY_UCMD_MAGIC) {
+	s = (struct mdw_sample_ucmd *)u->kva;
+	if (s->cmd_idx != MDW_SAMPLE_UCMD_IDX ||
+		s->magic != MDW_SAMPLE_UCMD_MAGIC) {
 		mdw_drv_err("user cmd param not match(%d/0x%llx)\n",
 			s->cmd_idx, s->magic);
 		return -EINVAL;
 	}
 
-	s->u_write = MDW_DMY_UCMD_UW;
+	s->u_write = MDW_SAMPLE_UCMD_UW;
 	mdw_sub_debug("get user cm ok\n");
 
 	return ret;
 }
 
 //----------------------------------------------
-static int mdw_dmy_send_cmd(int type, void *hnd, struct apusys_device *dev)
+static int mdw_sample_send_cmd(int type, void *hnd, struct apusys_device *dev)
 {
 	int ret = 0;
 
 	mdw_sub_debug("send cmd: private ptr = %p\n", dev->private);
 
-	mdw_dmy_print_hnd(type, hnd);
+	mdw_sample_print_hnd(type, hnd);
 
 	switch (type) {
 	case APUSYS_CMD_POWERON:
 		mdw_sub_debug("cmd poweron\n");
-		ret = mdw_dmy_pwron(hnd,
-			(struct mdw_dmy_dev_info *)dev->private);
+		ret = mdw_sample_pwron(hnd,
+			(struct mdw_sample_dev_info *)dev->private);
 		break;
 
 	case APUSYS_CMD_POWERDOWN:
 		mdw_sub_debug("cmd powerdown\n");
-		ret = mdw_dmy_pwroff((struct mdw_dmy_dev_info *)dev->private);
+		ret = mdw_sample_pwroff((struct mdw_sample_dev_info *)dev->private);
 		break;
 
 	case APUSYS_CMD_RESUME:
 		mdw_sub_debug("cmd resume\n");
-		ret = mdw_dmy_resume();
+		ret = mdw_sample_resume();
 		break;
 
 	case APUSYS_CMD_SUSPEND:
 		mdw_sub_debug("cmd suspend\n");
-		ret = mdw_dmy_suspend();
+		ret = mdw_sample_suspend();
 		break;
 
 	case APUSYS_CMD_EXECUTE:
 		mdw_sub_debug("cmd execute\n");
-		ret = mdw_dmy_exec(hnd, dev);
+		ret = mdw_sample_exec(hnd, dev);
 		break;
 
 	case APUSYS_CMD_USER:
-		ret = mdw_dmy_usr_cmd(hnd,
-			(struct mdw_dmy_dev_info *)dev->private);
+		ret = mdw_sample_usr_cmd(hnd,
+			(struct mdw_sample_dev_info *)dev->private);
+		break;
+
+	case APUSYS_CMD_VALIDATE:
+		mdw_sub_debug("skip validate\n");
+		break;
+
+	case APUSYS_CMD_SESSION_CREATE:
+		mdw_sub_debug("skip session create\n");
+		break;
+
+	case APUSYS_CMD_SESSION_DELETE:
+		mdw_sub_debug("skip session delete\n");
 		break;
 
 	default:
@@ -303,35 +315,35 @@ static int mdw_dmy_send_cmd(int type, void *hnd, struct apusys_device *dev)
 	return ret;
 }
 
-int mdw_dmy_init(void)
+int mdw_sample_init(void)
 {
 	int ret = 0, i = 0, n = 0;
 
-	for (i = 0; i < MDW_DMY_DEV_NUM; i++) {
+	for (i = 0; i < MDW_SAMPLE_DEV_NUM; i++) {
 		/* assign private info */
-		mdw_dmy_inst[i].idx = i;
-		if (snprintf(mdw_dmy_inst[i].name, 21,
+		mdw_sample_inst[i].idx = i;
+		if (snprintf(mdw_sample_inst[i].name, 21,
 			"apusys sample driver") < 0)
 			goto delete_dev;
 
 		/* assign sample dev */
-		mdw_dmy_inst[i].dev.dev_type = APUSYS_DEVICE_SAMPLE;
-		mdw_dmy_inst[i].dev.preempt_type = APUSYS_PREEMPT_NONE;
-		mdw_dmy_inst[i].dev.preempt_level = 0;
-		n = snprintf(mdw_dmy_inst[i].dev.meta_data,
-			sizeof(mdw_dmy_inst[i].dev.meta_data),
-			MDW_DMY_META_DATA);
-		if (n < 0 || n >= sizeof(mdw_dmy_inst[i].dev.meta_data))
+		mdw_sample_inst[i].dev.dev_type = APUSYS_DEVICE_SAMPLE;
+		mdw_sample_inst[i].dev.preempt_type = APUSYS_PREEMPT_NONE;
+		mdw_sample_inst[i].dev.preempt_level = 0;
+		n = snprintf(mdw_sample_inst[i].dev.meta_data,
+			sizeof(mdw_sample_inst[i].dev.meta_data),
+			MDW_SAMPLE_META_DATA);
+		if (n < 0 || n >= sizeof(mdw_sample_inst[i].dev.meta_data))
 			goto delete_dev;
-		mdw_dmy_inst[i].dev.private = &mdw_dmy_inst[i];
-		mdw_dmy_inst[i].dev.send_cmd = mdw_dmy_send_cmd;
-		mdw_dmy_inst[i].dev.idx = i;
-		mdw_dmy_inst[i].idx = i;
+		mdw_sample_inst[i].dev.private = &mdw_sample_inst[i];
+		mdw_sample_inst[i].dev.send_cmd = mdw_sample_send_cmd;
+		mdw_sample_inst[i].dev.idx = i;
+		mdw_sample_inst[i].idx = i;
 
-		mutex_init(&mdw_dmy_inst[i].mtx);
+		mutex_init(&mdw_sample_inst[i].mtx);
 
 		/* register device to midware */
-		if (apusys_register_device(&mdw_dmy_inst[i].dev)) {
+		if (apusys_register_device(&mdw_sample_inst[i].dev)) {
 			mdw_drv_err("register dev fail\n");
 			ret = -EINVAL;
 			goto delete_dev;
@@ -341,12 +353,12 @@ int mdw_dmy_init(void)
 	goto out;
 
 delete_dev:
-	memset(mdw_dmy_inst, 0, sizeof(mdw_dmy_inst));
+	memset(mdw_sample_inst, 0, sizeof(mdw_sample_inst));
 out:
 	return ret;
 }
 
-void mdw_dmy_deinit(void)
+void mdw_sample_deinit(void)
 {
-	memset(mdw_dmy_inst, 0, sizeof(mdw_dmy_inst));
+	memset(mdw_sample_inst, 0, sizeof(mdw_sample_inst));
 }
