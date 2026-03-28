@@ -1,0 +1,5 @@
+ifneq ($(DEVICE_MODULES_PATH),)
+ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/tee/tkcore/include/linux
+else
+ccflags-y += -I$(srctree)/drivers/tee/tkcore/include/linux
+endif
