@@ -70,6 +70,10 @@ static u32 rpmb_gp_devid = MC_DEVICE_ID_DEFAULT;
 static struct dciMessage_t *rpmb_gp_dci;
 #endif
 
+#if IS_ENABLED(CONFIG_TRUSTKERNEL_TEE_SUPPORT)
+#include "drrpmb_Api.h"
+#endif
+
 /* For nl socket */
 #ifdef __RPMB_KERNEL_NL_SUPPORT
 struct sock *rpmb_mtk_sock;
@@ -227,6 +231,8 @@ static struct class *mtk_rpmb_class;
 #ifdef __RPMB_KERNEL_NL_SUPPORT
 static int rpmb_mtk_snd_msg(void *pbuf, u16 len);
 #endif
+
+u16 rpmb_get_rw_size(struct rpmb_dev *rdev);
 
 void rpmb_req_copy_data_for_hmac(u8 *buf, struct rpmb_frame *f)
 {
@@ -645,7 +651,7 @@ static int rpmb_req_get_wc_ufs(u8 *keybytes, u32 *wc, u8 *frame)
 	return ret;
 }
 
-#if IS_ENABLED(CONFIG_TRUSTONIC_TEE_SUPPORT)
+#if IS_ENABLED(CONFIG_TRUSTONIC_TEE_SUPPORT) || IS_ENABLED(CONFIG_TRUSTKERNEL_TEE_RPMB_SUPPORT)
 static int rpmb_req_read_data_ufs(u8 *frame, u32 blk_cnt)
 {
 	struct rpmb_data rpmbdata;
@@ -1671,6 +1677,7 @@ free:
 	return ret;
 }
 
+#if IS_ENABLED(CONFIG_TRUSTONIC_TEE_SUPPORT)
 static int rpmb_gp_execute_emmc(u32 cmdId)
 {
 	int ret;
@@ -1753,6 +1760,7 @@ static int rpmb_gp_execute_emmc(u32 cmdId)
 
 	return 0;
 }
+#endif
 
 int rpmb_req_get_wc_emmc(struct mmc_card *card, u8 *key, u32 *wc)
 {
@@ -2487,7 +2495,44 @@ static long rpmb_ioctl_ufs(struct file *pfile, unsigned int cmd, unsigned long a
 	int err = 0;
 	unsigned long n;
 	struct rpmb_ioc_param param;
+#if IS_ENABLED(CONFIG_TRUSTKERNEL_TEE_RPMB_SUPPORT)
+	struct rpmb_request rpmbreq;
+	unsigned char *rpmb_frame = NULL;
+	struct rpmb_dev *rawdev_ufs_rpmb;
 
+	memset(&rpmbreq, 0, sizeof(rpmbreq));
+
+	err = copy_from_user(&rpmbreq,
+			(void *) arg, sizeof(rpmbreq));
+	if (err) {
+		MSG(ERR, "%s, copy from user failed with %x\n", __func__, err);
+		return -EFAULT;
+	}
+
+	if ((rpmbreq.nr * RPMB_DATA_FRAME_SIZE) > RPMB_DATA_BUFFER_SIZE) {
+		MSG(ERR, "%s, rpmb buffer too large\n", __func__);
+		return -EINVAL;
+	}
+
+	if (rpmbreq.nr != 0) {
+
+		rpmb_frame = kmalloc(rpmbreq.nr * RPMB_DATA_FRAME_SIZE, GFP_KERNEL);
+		if (rpmb_frame == NULL) {
+			MSG(ERR, "%s, failed to malloc rpmb buffer\n", __func__);
+			return -ENOMEM;
+		}
+
+		err = copy_from_user(rpmb_frame, rpmbreq.data_frame,
+				rpmbreq.nr * RPMB_DATA_FRAME_SIZE);
+		if (err) {
+			MSG(ERR, "%s, copy from user failed with %x\n", __func__, err);
+			kfree(rpmb_frame);
+
+			return -EFAULT;
+		}
+	}
+
+#endif
 	n = copy_from_user(&param, (void *)arg, sizeof(param));
 
 	if (n != 0UL) {
@@ -2539,6 +2584,93 @@ static long rpmb_ioctl_ufs(struct file *pfile, unsigned int cmd, unsigned long a
 
 		break;
 
+#if IS_ENABLED(CONFIG_TRUSTKERNEL_TEE_RPMB_SUPPORT)
+	case RPMB_IOCTL_TKCORE_READ_DATA:
+		err = rpmb_req_read_data_ufs(
+					rpmb_frame, rpmbreq.nr);
+		if (err) {
+			MSG(ERR, "%s: rpmb read request IO error(%x)\n",
+				__func__, err);
+			kfree(rpmb_frame);
+			return err;
+		}
+
+		err = copy_to_user(rpmbreq.data_frame, rpmb_frame,
+			rpmbreq.nr * RPMB_DATA_FRAME_SIZE);
+
+		kfree(rpmb_frame);
+
+		if (err) {
+			MSG(ERR, "%s: copy to user failed: %x\n",
+				__func__, err);
+		}
+
+		break;
+
+	case RPMB_IOCTL_TKCORE_GET_CNT:
+		err = rpmb_req_get_wc_ufs(
+					NULL, NULL, rpmb_frame);
+		if (err) {
+			MSG(ERR, "%s: rpmb get write counter error(%x)\n",
+				__func__, err);
+			kfree(rpmb_frame);
+			return err;
+		}
+
+		err = copy_to_user(rpmbreq.data_frame, rpmb_frame,
+				rpmbreq.nr * RPMB_DATA_FRAME_SIZE);
+
+		kfree(rpmb_frame);
+
+		if (err) {
+			MSG(ERR, "%s: copy to user failed: %x\n",
+				__func__, err);
+		}
+
+		break;
+
+	case RPMB_IOCTL_TKCORE_WRITE_DATA:
+		err = rpmb_req_write_data_ufs(
+					rpmb_frame, rpmbreq.nr);
+		if (err) {
+			MSG(ERR, "%s: rpmb write request IO error(%x)\n",
+				__func__, err);
+			kfree(rpmb_frame);
+			return err;
+		}
+
+		// only one frame is useful for rpmb write
+		err = copy_to_user(rpmbreq.data_frame, rpmb_frame,
+					RPMB_DATA_FRAME_SIZE);
+
+		kfree(rpmb_frame);
+
+		if (err) {
+			MSG(ERR, "%s: copy to user failed: %x\n",
+				__func__, err);
+		}
+
+		break;
+
+	case RPMB_IOCTL_TKCORE_GET_WR_SIZE:
+
+		rawdev_ufs_rpmb = ufs_mtk_rpmb_get_raw_dev();
+		if (rawdev_ufs_rpmb) {
+			rpmbreq.rel_wr_sec_c = rpmb_get_rw_size(rawdev_ufs_rpmb) / 2;
+
+			err = copy_to_user((void *) arg,
+					&rpmbreq, sizeof(rpmbreq));
+			if (err) {
+				MSG(ERR, "%s: copy to user failed: %x\n",
+					__func__, err);
+			}
+		} else {
+			err = RPMB_ALLOC_ERROR;
+		}
+
+		break;
+
+#endif
 	default:
 		MSG(ERR, "%s, wrong ioctl code (%d)!!!\n", __func__, cmd);
 		err = -ENOTTY;
@@ -2558,11 +2690,51 @@ long rpmb_ioctl_emmc(struct file *file, unsigned int cmd, unsigned long arg)
 	struct rpmb_ioc_param param;
 	unsigned char *ukey, *udata;
 	int err = 0;
+#if IS_ENABLED(CONFIG_TRUSTKERNEL_TEE_RPMB_SUPPORT)
+	struct rpmb_request rpmbreq;
+	unsigned char *rpmb_frame = NULL;
+	struct rpmb_dev *rawdev_ufs_rpmb;
+#endif
 
 	if (!mmc || !mmc->card)
 		return -EFAULT;
 
 	card = mmc->card;
+
+#if IS_ENABLED(CONFIG_TRUSTKERNEL_TEE_RPMB_SUPPORT)
+	memset(&rpmbreq, 0, sizeof(rpmbreq));
+
+	err = copy_from_user(&rpmbreq,
+			(void *) arg, sizeof(rpmbreq));
+	if (err) {
+		MSG(ERR, "%s, copy from user failed with %x\n", __func__, err);
+		return -EFAULT;
+	}
+
+	if ((rpmbreq.nr * RPMB_DATA_FRAME_SIZE) > RPMB_DATA_BUFFER_SIZE) {
+		MSG(ERR, "%s, rpmb buffer too large\n", __func__);
+		return -EINVAL;
+	}
+
+	if (rpmbreq.nr != 0) {
+
+		rpmb_frame = kmalloc(rpmbreq.nr * RPMB_DATA_FRAME_SIZE, GFP_KERNEL);
+		if (rpmb_frame == NULL) {
+			MSG(ERR, "%s, failed to malloc rpmb buffer\n", __func__);
+			return -ENOMEM;
+		}
+
+		err = copy_from_user(rpmb_frame, rpmbreq.data_frame,
+				rpmbreq.nr * RPMB_DATA_FRAME_SIZE);
+		if (err) {
+			MSG(ERR, "%s, copy from user failed with %x\n", __func__, err);
+			kfree(rpmb_frame);
+
+			return -EFAULT;
+		}
+	}
+
+#endif
 
 	err = copy_from_user(&param, (void *)arg, sizeof(param));
 	if (err) {
@@ -2652,6 +2824,93 @@ long rpmb_ioctl_emmc(struct file *file, unsigned int cmd, unsigned long arg)
 
 		break;
 
+#if IS_ENABLED(CONFIG_TRUSTKERNEL_TEE_RPMB_SUPPORT)
+	case RPMB_IOCTL_TKCORE_READ_DATA:
+		err = rpmb_req_read_data_ufs(
+					rpmb_frame, rpmbreq.nr);
+		if (err) {
+			MSG(ERR, "%s: rpmb read request IO error(%x)\n",
+				__func__, err);
+			kfree(rpmb_frame);
+			return err;
+		}
+
+		err = copy_to_user(rpmbreq.data_frame, rpmb_frame,
+			rpmbreq.nr * RPMB_DATA_FRAME_SIZE);
+
+		kfree(rpmb_frame);
+
+		if (err) {
+			MSG(ERR, "%s: copy to user failed: %x\n",
+				__func__, err);
+		}
+
+		break;
+
+	case RPMB_IOCTL_TKCORE_GET_CNT:
+		err = rpmb_req_get_wc_ufs(
+					NULL, NULL, rpmb_frame);
+		if (err) {
+			MSG(ERR, "%s: rpmb get write counter error(%x)\n",
+				__func__, err);
+			kfree(rpmb_frame);
+			return err;
+		}
+
+		err = copy_to_user(rpmbreq.data_frame, rpmb_frame,
+				rpmbreq.nr * RPMB_DATA_FRAME_SIZE);
+
+		kfree(rpmb_frame);
+
+		if (err) {
+			MSG(ERR, "%s: copy to user failed: %x\n",
+				__func__, err);
+		}
+
+		break;
+
+	case RPMB_IOCTL_TKCORE_WRITE_DATA:
+		err = rpmb_req_write_data_ufs(
+					rpmb_frame, rpmbreq.nr);
+		if (err) {
+			MSG(ERR, "%s: rpmb write request IO error(%x)\n",
+				__func__, err);
+			kfree(rpmb_frame);
+			return err;
+		}
+
+		// only one frame is useful for rpmb write
+		err = copy_to_user(rpmbreq.data_frame, rpmb_frame,
+					RPMB_DATA_FRAME_SIZE);
+
+		kfree(rpmb_frame);
+
+		if (err) {
+			MSG(ERR, "%s: copy to user failed: %x\n",
+				__func__, err);
+		}
+
+		break;
+
+	case RPMB_IOCTL_TKCORE_GET_WR_SIZE:
+
+		rawdev_ufs_rpmb = ufs_mtk_rpmb_get_raw_dev();
+		if (rawdev_ufs_rpmb) {
+			rpmbreq.rel_wr_sec_c = rpmb_get_rw_size(rawdev_ufs_rpmb);
+
+			err = copy_to_user((void *) arg,
+					&rpmbreq, sizeof(rpmbreq));
+			if (err) {
+				MSG(ERR, "%s: copy to user failed: %x\n",
+					__func__, err);
+			}
+		} else {
+			err = RPMB_ALLOC_ERROR;
+		}
+
+		break;
+
+#endif
 	default:
 		MSG(ERR, "%s, wrong ioctl code (%d)!!!\n", __func__, cmd);
 		ret = -ENOTTY;
